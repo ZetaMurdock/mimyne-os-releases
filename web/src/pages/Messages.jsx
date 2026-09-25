@@ -13,6 +13,7 @@ import { lookupUsername } from '../data/identity.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
 import { uploadFile } from '../lib/files.js';
+import { linkTarget, mimyneLinks } from '../lib/share.js';
 import { formatBytes, timeAgo } from '../lib/format.js';
 import NeedsAccount from './NeedsAccount.jsx';
 import './Messages.css';
@@ -384,6 +385,9 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
           <FileCard file={f} compact />
         </div>
       ))}
+      {mimyneLinks(message.text).map((path) => (
+        <LinkBubble key={path} path={path} />
+      ))}
       {message.post && <SharedPost post={message.post} />}
       {message.profileUid && <SharedProfile uid={message.profileUid} />}
       {!editing && (
@@ -431,11 +435,51 @@ function SharedPost({ post }) {
   return (
     <Link to={postUrl(card)} className="msg--card msg__shared">
       <span className="msg__shared-kind">
-        <Icon name="share" size={12} /> Post by {author.name}
+        <Mark /> Post by {author.name}
       </span>
       {card.title && <strong>{card.title}</strong>}
       {card.body && <span className="msg__shared-body">{card.body}</span>}
       {card.files.length > 0 && <span className="muted">📎 {card.files.length === 1 ? card.files[0].name : `${card.files.length} files`}</span>}
+    </Link>
+  );
+}
+
+// Mimyne's mark on anything passed on in a message.
+const Mark = () => <img src="/logo.png" alt="" className="msg__mark" aria-hidden="true" />;
+
+/** A link to a Hub, post or profile on mimyne.com, as a small card of what it is. */
+function LinkBubble({ path }) {
+  const target = linkTarget(path);
+  if (!target) return null;
+  if (target.kind === 'post') return <SharedPost post={target} />;
+  if (target.kind === 'profile') return target.uid ? <SharedProfile uid={target.uid} /> : <NamedProfile name={target.name} />;
+  return <SharedHub hubId={target.hubId} />;
+}
+
+function NamedProfile({ name }) {
+  const [uid, setUid] = useState(undefined);
+  useEffect(() => {
+    lookupUsername(name).then(setUid).catch(() => setUid(null));
+  }, [name]);
+  if (uid === undefined) return null;
+  if (!uid) return null;
+  return <SharedProfile uid={uid} />;
+}
+
+function SharedHub({ hubId }) {
+  const [hub, setHub] = useState(undefined);
+  useEffect(() => {
+    getHubCard(hubId).then(setHub).catch(() => setHub(null));
+  }, [hubId]);
+  if (!hub) return null;
+  return (
+    <Link to={`/h/${hub.id}`} className="msg--card msg__profile">
+      <HubIcon hub={hub} size={40} />
+      <span className="msg__shared-text">
+        <strong>{hub.name}</strong>
+        <span className="muted">{hub.tagline || 'A Hub on Mimyne'}</span>
+      </span>
+      <Mark />
     </Link>
   );
 }
@@ -448,8 +492,9 @@ function SharedProfile({ uid }) {
       <Avatar person={person} size={40} />
       <span className="msg__shared-text">
         <strong>{person.name}</strong>
-        <span className="muted">@{person.username} · View profile</span>
+        <span className="muted">@{person.username} · Profile on Mimyne</span>
       </span>
+      <Mark />
     </Link>
   );
 }

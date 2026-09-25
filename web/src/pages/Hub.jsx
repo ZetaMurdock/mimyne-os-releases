@@ -142,7 +142,7 @@ export default function Hub() {
         <ShareDialog
           title={`Share ${hub.name}`}
           link={`/h/${hub.id}`}
-          payload={{ text: `${hub.name}: ${location.origin}/h/${hub.id}` }}
+          payload={{ text: `https://mimyne.com/h/${hub.id}` }}
           onClose={() => setSharing(false)}
         />
       )}
