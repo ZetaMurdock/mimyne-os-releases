@@ -89,13 +89,13 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
         <div>
           <h2 className="shelf__title">Files</h2>
           <p className="muted shelf__sub">
-            {items ? `${items.length} ${items.length === 1 ? 'file' : 'files'} · ${formatBytes(totalSize)}` : 'Loading…'} · Convert anything here into the format you need.
+            {items ? `${items.length} ${items.length === 1 ? 'file' : 'files'} · ${formatBytes(totalSize)}` : 'Loading…'}
           </p>
         </div>
         {canAdd ? (
-          <Button variant="primary" icon="upload" onClick={() => picker.current.click()}>Add files</Button>
+          <Button icon="upload" onClick={() => picker.current.click()}>Upload</Button>
         ) : !user ? (
-          <Button variant="primary" onClick={onSignIn}>Sign in to add files</Button>
+          <Button variant="inverse" onClick={onSignIn}>Sign in to upload</Button>
         ) : null}
         <input
           ref={picker}
@@ -111,13 +111,9 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
 
       {canAdd && (
         <button type="button" className="shelf__drop" onClick={() => picker.current.click()}>
-          <span className="shelf__drop-icon"><Icon name="upload" size={22} /></span>
+          <Icon name="upload" size={18} />
           <span>
-            <strong>Drop files and media here</strong>
-            <span className="muted">Pictures, video, audio, CSV, JSON, Markdown, anything. Any size.</span>
-          </span>
-          <span className="shelf__formats" aria-hidden="true">
-            {['MP4', 'MP3', 'GIF', 'PNG', 'WebP', 'PDF', 'CSV'].map((f) => <span key={f}>{f}</span>)}
+            Drop files here, or <span className="shelf__browse">browse</span>. Anything on the shelf can be converted to another format.
           </span>
         </button>
       )}
@@ -182,7 +178,7 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
       {dragging && (
         <div className="shelf__dropping" aria-hidden="true">
           <Icon name="upload" size={34} />
-          <strong>Drop to put on {hub.name}'s shelf</strong>
+          <span>Drop to upload to {hub.name}</span>
         </div>
       )}
 
@@ -213,7 +209,7 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
         </span>
         {item.fromName && (
           <span className="tile__from" title={`Converted from ${item.fromName}`}>
-            <Icon name="convert" size={12} /> from {item.fromName}
+            Converted from {item.fromName}
           </span>
         )}
       </div>
@@ -224,7 +220,8 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
             align="start"
             trigger={(props) => (
               <button type="button" className="tile__convert" onClick={props.toggle} aria-expanded={props['aria-expanded']} aria-controls={props['aria-controls']} aria-label={props['aria-label']}>
-                <Icon name="convert" size={15} /> Convert
+                Convert
+                <Icon name="arrowDown" size={13} />
               </button>
             )}
           >
@@ -365,7 +362,7 @@ function ConvertDialog({ hub, user, canAdd, item, target, onClose, onRetarget })
   const smaller = result && result.file.size < item.file.size;
 
   return (
-    <Dialog title="Convert" onClose={busy ? undefined : onClose} width={520}>
+    <Dialog title="Convert file" onClose={busy ? undefined : onClose} width={520}>
       <div className="convert">
         <div className="convert__route">
           <span className="convert__file">
@@ -431,23 +428,21 @@ function ConvertDialog({ hub, user, canAdd, item, target, onClose, onRetarget })
               )}
             </div>
             <p className="convert__stats">
-              <Icon name="check" size={14} strokeWidth={2.4} />
-              {formatBytes(item.file.size)} → <strong>{formatBytes(result.file.size)}</strong>
-              {smaller && <span className="convert__saving">{Math.round((1 - result.file.size / item.file.size) * 100)}% smaller</span>}
-              <span className="muted">in {(result.ms / 1000).toFixed(1)}s</span>
+              Done in {(result.ms / 1000).toFixed(1)}s · {formatBytes(item.file.size)} → {formatBytes(result.file.size)}
+              {smaller && ` (${Math.round((1 - result.file.size / item.file.size) * 100)}% smaller)`}
             </p>
             {error && <p className="form-error">{error}</p>}
             <div className="convert__actions">
               <Button icon="download" onClick={download}>Download</Button>
               {canAdd && (
-                <Button variant="primary" icon={saved ? 'check' : 'upload'} onClick={shelve} loading={saving !== null} disabled={saved}>
-                  {saved ? 'On the shelf' : saving !== null ? `${Math.round(saving * 100)}%` : `Put on ${hub.name}'s shelf`}
+                <Button variant="inverse" icon={saved ? 'check' : undefined} onClick={shelve} loading={saving !== null} disabled={saved}>
+                  {saved ? 'Saved to Files' : saving !== null ? `Saving ${Math.round(saving * 100)}%` : 'Save to Files'}
                 </Button>
               )}
             </div>
             {others.length > 0 && (
               <div className="convert__again">
-                <span className="muted">Or make it</span>
+                <span className="muted">Convert to</span>
                 {others.slice(0, 6).map((t) => (
                   <button key={t.id} type="button" className="hf-chip" onClick={() => onRetarget(t)}>{t.label}</button>
                 ))}

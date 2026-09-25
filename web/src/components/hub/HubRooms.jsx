@@ -332,7 +332,7 @@ function RoomDialog({ hub, room, count, user, onMove, onClose, onMade }) {
           )}
           <span className="room-form__spacer" />
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="primary" loading={busy}>
+          <Button type="submit" variant="inverse" loading={busy}>
             {room ? 'Save' : 'Make Room'}
           </Button>
         </div>

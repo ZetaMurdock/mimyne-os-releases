@@ -22,7 +22,7 @@
   grid-template-columns: 232px minmax(0, 1fr) 248px;
   height: clamp(540px, calc(100vh - 150px), 960px);
   border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border-radius: 12px;
   background: var(--surface-1);
   overflow: hidden;
 }
@@ -52,10 +52,8 @@
 
 .rooms__group-name {
   color: var(--text-3);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .rooms__add {
@@ -98,13 +96,7 @@
 }
 
 .rooms__item.is-unread::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  width: 4px;
-  height: 8px;
-  border-radius: 0 4px 4px 0;
-  background: var(--text);
+  content: none;
 }
 
 .rooms__link {
@@ -113,18 +105,18 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: 34px;
+  height: 32px;
   padding: 0 8px 0 10px;
   border: 0;
   background: none;
   color: inherit;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 450;
   text-align: left;
 }
 
 .rooms__item.is-unread .rooms__link {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rooms__link svg {
@@ -139,11 +131,11 @@
 }
 
 .rooms__dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   margin-left: auto;
   border-radius: 50%;
-  background: var(--accent-text);
+  background: var(--text);
   flex-shrink: 0;
 }
 
@@ -213,8 +205,8 @@
 
 .rooms__title {
   color: var(--text);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -291,19 +283,18 @@
 .room__start-icon {
   display: grid;
   place-items: center;
-  width: 64px;
-  height: 64px;
-  margin-bottom: 6px;
-  border-radius: 50%;
-  background: var(--hover);
-  color: var(--text);
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  color: var(--text-2);
 }
 
 .room__start h3 {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .room__older {
@@ -328,7 +319,7 @@
   margin: 18px 18px 6px;
   color: var(--text-3);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .room__day::before,
@@ -356,12 +347,12 @@
 }
 
 .room-msg.is-mention {
-  background: rgb(242 184 75 / 0.08);
-  box-shadow: inset 2px 0 0 var(--approve);
+  background: rgb(255 255 255 / 0.04);
+  box-shadow: inset 2px 0 0 var(--text-3);
 }
 
 .room-msg.is-mention:hover {
-  background: rgb(242 184 75 / 0.12);
+  background: rgb(255 255 255 / 0.06);
 }
 
 .room-msg.is-flash {
@@ -371,7 +362,7 @@
 @keyframes room-flash {
   0%,
   40% {
-    background: var(--accent-tint);
+    background: rgb(255 255 255 / 0.07);
   }
 }
 
@@ -422,8 +413,8 @@
 
 .room-msg__name {
   color: var(--text);
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 14.5px;
+  font-weight: 600;
 }
 
 .room-msg__name:hover {
@@ -431,14 +422,9 @@
 }
 
 .room-msg__badge {
-  padding: 0 6px;
-  border: 1px solid;
-  border-radius: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .room-msg__time {
@@ -460,16 +446,15 @@
 }
 
 .room-msg__mention {
-  padding: 0 3px;
+  padding: 0 2px;
   border-radius: 4px;
-  background: var(--accent-tint);
-  color: var(--accent-text);
-  font-weight: 600;
+  background: rgb(255 255 255 / 0.08);
+  color: var(--text);
+  font-weight: 500;
 }
 
 .room-msg__mention:hover {
-  background: var(--accent);
-  color: #fff;
+  background: rgb(255 255 255 / 0.14);
 }
 
 .room-msg__files {
@@ -640,16 +625,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: var(--accent);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
-  color: #fff;
+  padding: 6px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.4);
+  color: var(--text);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   transform: translateX(-50%);
-  animation: menu-in var(--d-menu) var(--ease-out);
 }
 
 /* ------------------------------------------------------------ composer */
@@ -668,7 +652,7 @@
   gap: 4px;
   padding: 5px 6px;
   border: 1px solid var(--border-2);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface-2);
   transition: border-color var(--d-press) ease;
 }
@@ -684,9 +668,9 @@
   height: 34px;
   margin-bottom: 2px;
   border: 0;
-  border-radius: 50%;
-  background: var(--hover);
-  color: var(--text-2);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-3);
   flex-shrink: 0;
 }
 
@@ -768,10 +752,8 @@
 .room__mentions-head {
   padding: 4px 8px 6px;
   color: var(--text-3);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .room__mention {
@@ -819,10 +801,10 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border: 2px dashed var(--accent-text);
-  border-radius: 14px;
-  background: rgb(28 21 48 / 0.88);
-  color: var(--text);
+  border: 1px dashed var(--text-3);
+  border-radius: 10px;
+  background: rgb(5 5 5 / 0.88);
+  color: var(--text-2);
   pointer-events: none;
 }
 
@@ -850,18 +832,15 @@
   gap: 6px;
   padding: 10px 8px 4px;
   color: var(--text-3);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .rooms__live-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--live);
-  box-shadow: 0 0 0 3px rgb(74 222 128 / 0.15);
 }
 
 .rooms__people-none {
@@ -912,8 +891,8 @@
 
 .rooms__person-name {
   overflow: hidden;
-  font-size: 14px;
-  font-weight: 550;
+  font-size: 13.5px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -968,9 +947,9 @@
 }
 
 .room-form__kind.is-on {
-  border-color: var(--accent-text);
-  background: var(--accent-tint);
-  color: var(--accent-text);
+  border-color: var(--text-3);
+  background: var(--hover);
+  color: var(--text);
 }
 
 .room-form__name {
@@ -1075,4 +1054,11 @@
   .room__composer {
     padding: 0 10px 10px;
   }
+}
+
+/* Buttons in the Rooms are squarer and quieter than the rest of the site's. */
+.rooms .btn,
+.room-form .btn {
+  border-radius: 8px;
+  font-weight: 500;
 }
