@@ -1,41 +1,30 @@
-import { useState } from 'react';
 import Icon from './Icon.jsx';
 import './ApproveBar.css';
 
 // Approve fills the crown in gold. Disapprove is the quiet one and tells
-// nobody. Signed out, the count shows but the buttons ask you to sign in.
-export default function ApproveBar({ count, approved = false, small = false, signedIn = true, onNeedAccount }) {
-  const [vote, setVote] = useState(approved ? 1 : 0);
-  const shown = count - (approved ? 1 : 0) + (vote === 1 ? 1 : 0);
-
-  function cast(value) {
-    if (!signedIn) {
-      onNeedAccount?.();
-      return;
-    }
-    setVote((v) => (v === value ? 0 : value));
-  }
-
+// nobody. The caller owns the vote; signed out, pressing either asks you to
+// sign in.
+export default function ApproveBar({ count, mine = null, small = false, onVote }) {
   return (
     <span className={`approve ${small ? 'approve--small' : ''}`}>
       <button
         type="button"
-        className={`approve__btn approve__btn--up ${vote === 1 ? 'is-on' : ''}`}
+        className={`approve__btn approve__btn--up ${mine === 'up' ? 'is-on' : ''}`}
         aria-label="Approve"
-        aria-pressed={vote === 1}
-        onClick={() => cast(1)}
+        aria-pressed={mine === 'up'}
+        onClick={() => onVote(mine === 'up' ? null : 'up')}
       >
-        <Icon name="crown" size={small ? 14 : 16} fill={vote === 1 ? 'currentColor' : 'none'} />
+        <Icon name="crown" size={small ? 14 : 16} fill={mine === 'up' ? 'currentColor' : 'none'} />
       </button>
-      <span className={`approve__count ${vote === 1 ? 'is-on' : ''}`}>{shown}</span>
+      <span className={`approve__count ${mine === 'up' ? 'is-on' : ''}`}>{count ?? '·'}</span>
       <button
         type="button"
-        className={`approve__btn approve__btn--down ${vote === -1 ? 'is-on' : ''}`}
+        className={`approve__btn approve__btn--down ${mine === 'down' ? 'is-on' : ''}`}
         aria-label="Disapprove"
-        aria-pressed={vote === -1}
-        onClick={() => cast(-1)}
+        aria-pressed={mine === 'down'}
+        onClick={() => onVote(mine === 'down' ? null : 'down')}
       >
-        <Icon name="drop" size={small ? 14 : 16} fill={vote === -1 ? 'currentColor' : 'none'} />
+        <Icon name="drop" size={small ? 14 : 16} fill={mine === 'down' ? 'currentColor' : 'none'} />
       </button>
     </span>
   );

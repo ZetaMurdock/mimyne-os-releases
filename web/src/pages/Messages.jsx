@@ -1,132 +1,166 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLoaderData, useParams } from 'react-router-dom';
+import { NavLink, useNavigate, useParams } from 'react-router-dom';
 import { Avatar, HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
-import Icon from '../components/Icon.jsx';
+import Dialog from '../components/Dialog.jsx';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
-import { getConversations, getHubSync, getPostSync, getRoom, getUser, sendMessage } from '../data/api.js';
+import { getHubCard, openDirect, sendMessage, watchConversations, watchMessages } from '../data/api.js';
+import { lookupUsername } from '../data/identity.js';
+import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
-import { fileKind, formatBytes, timeAgo } from '../lib/format.js';
+import { uploadFile } from '../lib/files.js';
+import { formatBytes, timeAgo } from '../lib/format.js';
 import NeedsAccount from './NeedsAccount.jsx';
 import './Messages.css';
 
-export function messagesLoader() {
-  return getConversations();
-}
-
 export default function Messages() {
-  const { user } = useSession();
-  return user ? <Inbox /> : <NeedsAccount what="your messages" />;
+  const { user, status } = useSession();
+  if (status === 'loading') return null;
+  return user ? <Inbox me={user} /> : <NeedsAccount what="your messages" />;
 }
 
-function describe(convo) {
-  if (convo.kind === 'group') {
-    const hub = getHubSync(convo.hub);
-    return { title: convo.title, icon: <HubIcon hub={hub} size={40} /> };
+// When each conversation was last opened on this device, for the unread dot.
+const SEEN_KEY = 'mimyne.seen';
+function seenMap() {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY)) ?? {};
+  } catch {
+    return {};
   }
-  const person = getUser(convo.with);
-  return { title: person.name, icon: <Avatar user={person} size={40} />, person };
+}
+function markSeen(id) {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify({ ...seenMap(), [id]: Date.now() }));
+  } catch {
+    // Storage blocked: the dot just stays.
+  }
 }
 
-function preview(message, me) {
-  const who = message.from === me ? 'You: ' : '';
-  if (message.text) return who + message.text;
-  if (message.files) return `${who}Sent ${message.files.length === 1 ? message.files[0].name : `${message.files.length} files`}`;
-  if (message.post) return `${who}Shared a post`;
-  if (message.invite) return `${who}Invited you to ${getRoom(message.invite.room)?.name}`;
-  return '';
-}
-
-function Inbox() {
-  const loaded = useLoaderData();
+function Inbox({ me }) {
   const { id } = useParams();
-  const { user } = useSession();
-  const [conversations, setConversations] = useState(loaded);
-  const active = conversations.find((c) => c.id === id) ?? conversations[0];
+  const navigate = useNavigate();
+  const [conversations, setConversations] = useState(null);
+  const [error, setError] = useState(null);
+  const [starting, setStarting] = useState(false);
+  const active = conversations?.find((c) => c.id === id) ?? (id ? null : conversations?.[0]);
 
+  useEffect(() => watchConversations(me.uid, setConversations, () => setError("Messages couldn't load.")), [me.uid]);
   useEffect(() => {
-    // Opening a conversation reads it.
-    if (active?.unread) active.unread = false;
-  }, [active]);
-
-  async function send(draft) {
-    await sendMessage(active.id, { from: user.id, ...draft });
-    setConversations((list) => [...list].sort((a, b) => b.at - a.at));
-  }
+    if (active) markSeen(active.id);
+  }, [active?.id, active?.at]);
 
   return (
     <div className="inbox">
       <nav className="inbox__list" aria-label="Conversations">
-        <h1 className="inbox__heading">Messages</h1>
-        {conversations.map((c) => {
-          const { title, icon } = describe(c);
-          const last = c.messages[c.messages.length - 1];
-          return (
-            <NavLink
-              key={c.id}
-              to={`/messages/${c.id}`}
-              className={({ isActive }) => `inbox__row ${isActive || (!id && c === active) ? 'is-active' : ''}`}
-              preventScrollReset
-            >
-              {icon}
-              <span className="inbox__row-text">
-                <span className="inbox__row-top">
-                  <span className="inbox__row-title">{title}</span>
-                  <span className="inbox__row-time">{timeAgo(c.at)}</span>
-                </span>
-                <span className={`inbox__row-preview ${c.unread ? 'is-unread' : ''}`}>{preview(last, user.id)}</span>
-              </span>
-              {c.unread && <span className="inbox__unread" aria-label="Unread" />}
-            </NavLink>
-          );
-        })}
+        <div className="inbox__heading">
+          <h1>Messages</h1>
+          <Button variant="ghost" icon="pen" iconOnly aria-label="New message" onClick={() => setStarting(true)} />
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        {conversations?.length === 0 && <p className="muted inbox__none">No conversations yet. Start one with the pen above.</p>}
+        {conversations?.map((c) => (
+          <Row key={c.id} convo={c} me={me} active={c === active} unread={c.lastFrom && c.lastFrom !== me.uid && c.at > (seenMap()[c.id] ?? 0) && c !== active} />
+        ))}
       </nav>
 
-      {active && <Conversation key={active.id} convo={active} onSend={send} />}
+      {active ? <Conversation key={active.id} convo={active} me={me} /> : <div className="inbox__blank muted">{conversations ? 'Pick a conversation.' : ''}</div>}
+
+      {starting && (
+        <NewMessage
+          me={me}
+          onClose={() => setStarting(false)}
+          onOpen={(convoId) => {
+            setStarting(false);
+            navigate(`/messages/${convoId}`);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function Conversation({ convo, onSend }) {
-  const { user } = useSession();
-  const { title, icon, person } = describe(convo);
+/** What a conversation is called, and its picture. */
+function useTitle(convo) {
+  const person = usePerson(convo.other);
+  const [hub, setHub] = useState(null);
+  useEffect(() => {
+    if (convo.hubId) getHubCard(convo.hubId).then(setHub);
+  }, [convo.hubId]);
+  if (convo.kind === 'direct') return { title: person.name, icon: (size) => <Avatar person={person} size={size} />, person };
+  if (hub) return { title: convo.title || hub.name, icon: (size) => <HubIcon hub={hub} size={size} /> };
+  return { title: convo.title || 'Group', icon: (size) => <HubIcon hub={{ name: convo.title || 'G', color: '#3F3F46' }} size={size} /> };
+}
+
+function Row({ convo, me, active, unread }) {
+  const { title, icon } = useTitle(convo);
+  const preview = convo.lastText ? `${convo.lastFrom === me.uid ? 'You: ' : ''}${convo.lastText}` : 'New conversation';
+  return (
+    <NavLink to={`/messages/${convo.id}`} className={`inbox__row ${active ? 'is-active' : ''}`} preventScrollReset>
+      {icon(40)}
+      <span className="inbox__row-text">
+        <span className="inbox__row-top">
+          <span className="inbox__row-title">{title}</span>
+          <span className="inbox__row-time">{timeAgo(convo.at)}</span>
+        </span>
+        <span className={`inbox__row-preview ${unread ? 'is-unread' : ''}`}>{preview}</span>
+      </span>
+      {unread && <span className="inbox__unread" aria-label="Unread" />}
+    </NavLink>
+  );
+}
+
+function Conversation({ convo, me }) {
+  const { title, icon, person } = useTitle(convo);
+  const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
+  const [progress, setProgress] = useState({});
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
   const fileInput = useRef(null);
   const end = useRef(null);
-  const count = convo.messages.length;
 
+  useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load.")), [convo.id]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
-  }, [count]);
+  }, [messages.length]);
 
   async function submit(event) {
     event.preventDefault();
     if (sending || (!text.trim() && !files.length)) return;
     setSending(true);
-    await onSend({ text: text.trim(), files: files.length ? files : undefined });
-    setText('');
-    setFiles([]);
-    setSending(false);
+    setError(null);
+    try {
+      const labels = [];
+      for (const { id, file } of files) labels.push(await uploadFile(file, (p) => setProgress((prev) => ({ ...prev, [id]: p }))));
+      await sendMessage(convo.id, me.uid, { text, files: labels });
+      setText('');
+      setFiles([]);
+    } catch (err) {
+      setError(err.code === 'permission-denied' ? "This message couldn't be sent." : err.message);
+    } finally {
+      setSending(false);
+      setProgress({});
+    }
   }
 
-  const sharedFiles = convo.messages.flatMap((m) => m.files ?? []);
+  const sharedFiles = messages.flatMap((m) => m.files);
 
   return (
     <>
       <section className="inbox__thread" aria-label={`Conversation with ${title}`}>
         <header className="inbox__head">
-          {icon}
+          {icon(36)}
           <span className="inbox__head-text">
             <span className="inbox__head-title">{title}</span>
-            {person?.activity && <span className="inbox__head-status">● {person.activity}</span>}
+            {person && <span className="inbox__head-sub">@{person.username}</span>}
           </span>
         </header>
 
         <div className="inbox__messages">
-          {convo.messages.map((m) => (
-            <Message key={m.id} message={m} mine={m.from === user.id} group={convo.kind === 'group'} />
+          {messages.length === 0 && <p className="muted inbox__none">Say hi.</p>}
+          {messages.map((m) => (
+            <Message key={m.id} message={m} mine={m.from === me.uid} group={convo.kind !== 'direct'} />
           ))}
           <div ref={end} />
         </div>
@@ -134,11 +168,12 @@ function Conversation({ convo, onSend }) {
         <form className="inbox__composer" onSubmit={submit}>
           {files.length > 0 && (
             <div className="inbox__pending">
-              {files.map((f) => (
-                <PendingFile key={f.name} file={f} onRemove={() => setFiles((list) => list.filter((x) => x !== f))} />
+              {files.map(({ id, file }) => (
+                <PendingFile key={id} file={file} progress={progress[id]} onRemove={() => setFiles((list) => list.filter((f) => f.id !== id))} />
               ))}
             </div>
           )}
+          {error && <p className="form-error" role="alert">{error}</p>}
           <div className="inbox__field">
             <input
               ref={fileInput}
@@ -146,8 +181,8 @@ function Conversation({ convo, onSend }) {
               multiple
               hidden
               onChange={(e) => {
-                const picked = [...e.target.files].map((f) => ({ name: f.name, size: f.size, kind: fileKind(f) }));
-                setFiles((list) => [...list, ...picked]);
+                const picked = [...e.target.files].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}`, file }));
+                setFiles((list) => [...list, ...picked].slice(0, 10));
                 e.target.value = '';
               }}
             />
@@ -156,6 +191,7 @@ function Conversation({ convo, onSend }) {
               className="inbox__input"
               aria-label={`Message ${title}`}
               placeholder={`Message ${title}. Any file, any size.`}
+              maxLength={4000}
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
@@ -166,14 +202,14 @@ function Conversation({ convo, onSend }) {
 
       <aside className="inbox__side">
         <div className="inbox__who">
-          {icon}
+          {icon(72)}
           <strong>{title}</strong>
         </div>
         <section className="inbox__side-block">
           <h2 className="label">Files in this chat</h2>
           {sharedFiles.length === 0 && <p className="muted">None yet.</p>}
-          {sharedFiles.map((f, i) => (
-            <div key={`${f.name}-${i}`} className="inbox__file">
+          {sharedFiles.map((f) => (
+            <div key={f.path} className="inbox__file">
               <span>{f.name}</span>
               <span className="muted">{formatBytes(f.size)}</span>
             </div>
@@ -185,53 +221,51 @@ function Conversation({ convo, onSend }) {
 }
 
 function Message({ message, mine, group }) {
-  const author = getUser(message.from);
-  const side = mine ? 'is-mine' : '';
-
-  if (message.invite) {
-    const room = getRoom(message.invite.room);
-    const hub = getHubSync(message.invite.hub);
-    return (
-      <div className={`msg msg--card ${side}`}>
-        <div className="msg__invite">
-          <span className="msg__invite-front" style={{ background: room.front }} />
-          <span className="msg__invite-text">
-            <strong>
-              {author.name} invited you to {message.invite.access === 'edit' ? 'edit' : 'join'} {room.name}
-            </strong>
-            <span className="muted">A room in {hub.name}</span>
-          </span>
-        </div>
-        <div className="msg__invite-actions">
-          <Button variant="inverse">Open in Mimyne</Button>
-          <Button>Later</Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (message.post) {
-    const post = getPostSync(message.post);
-    return (
-      <Link to={`/p/${post.id}`} className={`msg msg--card msg__post ${side}`}>
-        <span className="msg__post-thumb" />
-        <span className="msg__post-text">
-          <span className="muted">{getUser(post.author).name} · post</span>
-          <strong>{post.title ?? post.body}</strong>
-        </span>
-      </Link>
-    );
-  }
-
+  const author = usePerson(group && !mine ? message.from : null);
   return (
-    <div className={`msg ${side}`}>
+    <div className={`msg ${mine ? 'is-mine' : ''}`}>
       {group && !mine && <span className="msg__author">{author.name}</span>}
       {message.text && <p className="msg__bubble">{message.text}</p>}
-      {message.files?.map((f) => (
-        <div key={f.name} className="msg__file">
+      {message.files.map((f) => (
+        <div key={f.path} className="msg__file">
           <FileCard file={f} compact />
         </div>
       ))}
     </div>
+  );
+}
+
+function NewMessage({ me, onClose, onOpen }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const uid = await lookupUsername(name.replace(/^@/, ''));
+      if (!uid) throw new Error('Nobody has that username.');
+      onOpen(await openDirect(me.uid, uid));
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog title="New message" onClose={onClose}>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <label className="field">
+          Their username
+          <input className="field__input" required placeholder="@username" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <Button type="submit" variant="primary" size="lg" loading={busy} disabled={!name.trim()}>
+          Open conversation
+        </Button>
+      </form>
+    </Dialog>
   );
 }

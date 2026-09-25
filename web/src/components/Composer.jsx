@@ -2,12 +2,13 @@ import { useId, useRef, useState } from 'react';
 import { Avatar } from './Avatar.jsx';
 import Button from './Button.jsx';
 import { PendingFile } from './FileCard.jsx';
-import { fileKind } from '../lib/format.js';
+import { uploadFile } from '../lib/files.js';
 import { useSession } from '../data/session.jsx';
 import './Composer.css';
 
 // Post anything: words, a link, a clip, any file. Used for posts (with a
-// "Post to" choice), comments and replies.
+// "Post to" choice), comments and replies. Files upload when it's sent, each
+// with its own progress, and what's sent carries their labels.
 export default function Composer({
   placeholder = 'Post anything: words, a link, a clip, any file',
   destinations,
@@ -23,6 +24,8 @@ export default function Composer({
   const [files, setFiles] = useState([]);
   const [destination, setDestination] = useState(initialDestination ?? destinations?.[0]?.value ?? '');
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState({});
+  const [error, setError] = useState(null);
   const fileInput = useRef(null);
   const mediaInput = useRef(null);
   const selectId = useId();
@@ -30,20 +33,28 @@ export default function Composer({
   const canSend = !sending && (text.trim() || files.length);
 
   function addFiles(list) {
-    const picked = [...list].map((f) => ({ id: `${f.name}-${f.size}-${f.lastModified}`, name: f.name, size: f.size, kind: fileKind(f) }));
-    setFiles((prev) => [...prev, ...picked.filter((p) => !prev.some((q) => q.id === p.id))]);
+    const picked = [...list].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}`, file }));
+    setFiles((prev) => [...prev, ...picked.filter((p) => !prev.some((q) => q.id === p.id))].slice(0, 10));
   }
 
   async function submit(event) {
     event.preventDefault();
     if (!canSend) return;
     setSending(true);
+    setError(null);
     try {
-      await onSubmit({ text: text.trim(), files: files.map(({ id, ...f }) => f), destination });
+      const labels = [];
+      for (const { id, file } of files) {
+        labels.push(await uploadFile(file, (p) => setProgress((prev) => ({ ...prev, [id]: p }))));
+      }
+      await onSubmit({ text: text.trim(), files: labels, destination });
       setText('');
       setFiles([]);
+    } catch (err) {
+      setError(err.code === 'permission-denied' ? "You can't post here." : err.message);
     } finally {
       setSending(false);
+      setProgress({});
     }
   }
 
@@ -58,7 +69,7 @@ export default function Composer({
       }}
     >
       <div className="composer__row">
-        {!compact && <Avatar user={user} size={40} />}
+        {!compact && <Avatar person={user} size={40} />}
         <textarea
           className="composer__input"
           aria-label={placeholder}
@@ -75,11 +86,13 @@ export default function Composer({
 
       {files.length > 0 && (
         <div className="composer__files">
-          {files.map((f) => (
-            <PendingFile key={f.id} file={f} onRemove={() => setFiles((prev) => prev.filter((p) => p.id !== f.id))} />
+          {files.map(({ id, file }) => (
+            <PendingFile key={id} file={file} progress={progress[id]} onRemove={() => setFiles((prev) => prev.filter((p) => p.id !== id))} />
           ))}
         </div>
       )}
+
+      {error && <p className="form-error" role="alert">{error}</p>}
 
       <div className="composer__bar">
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => (addFiles(e.target.files), (e.target.value = ''))} />
@@ -117,7 +130,7 @@ export default function Composer({
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" loading={sending} disabled={!canSend}>
+        <Button type="submit" variant="primary" loading={sending} disabled={!canSend || !user}>
           {submitLabel}
         </Button>
       </div>

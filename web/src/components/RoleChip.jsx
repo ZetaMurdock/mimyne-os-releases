@@ -9,7 +9,7 @@ export default function RoleChip({ role }) {
         lineHeight: 1.4,
         padding: '2px 7px',
         borderRadius: 'var(--r-tag)',
-        background: role.tint,
+        background: `${role.color}26`,
         color: role.color,
         whiteSpace: 'nowrap',
       }}

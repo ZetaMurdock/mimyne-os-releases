@@ -1,11 +1,11 @@
 .hub__banner {
-  height: 240px;
+  height: 200px;
   border-bottom: 1px solid var(--border);
 }
 
 /* Signed in, the banner runs up under the floating notch. */
 .hub--under-notch .hub__banner {
-  height: 280px;
+  height: 240px;
   margin-top: calc(-1 * (var(--notch-h) + 32px));
   padding-top: 72px;
 }
@@ -252,4 +252,13 @@
   .hub__name {
     font-size: 26px;
   }
+}
+
+.hub__empty {
+  padding: var(--s-6) 0;
+  text-align: center;
+}
+
+.hub__rules-text {
+  white-space: pre-line;
 }

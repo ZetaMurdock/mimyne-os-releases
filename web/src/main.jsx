@@ -9,10 +9,10 @@ import './styles/tokens.css';
 import './styles/base.css';
 
 // Each social page is loaded only when it's opened, and not built at all while
-// SOCIAL is off, so the published site carries none of the sample data.
+// SOCIAL is off, so the published site doesn't carry Firebase until it's on.
 const page = (load, loaderName) => async () => {
   const mod = await load();
-  return { Component: mod.default, loader: mod[loaderName] };
+  return loaderName ? { Component: mod.default, loader: mod[loaderName] } : { Component: mod.default };
 };
 
 const router = createBrowserRouter([
@@ -24,14 +24,16 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Home /> },
           // Written out here rather than imported so the build can drop these
-          // routes, and the sample data behind them, when it's off (see lib/features.js).
+          // routes, and everything behind them, when it's off (see lib/features.js).
           ...(import.meta.env.DEV || import.meta.env.VITE_SOCIAL === 'true'
             ? [
                 { path: 'h/:slug', lazy: page(() => import('./pages/Hub.jsx'), 'hubLoader') },
+                { path: 'h/:hubId/p/:postId', lazy: page(() => import('./pages/Thread.jsx'), 'threadLoader') },
+                { path: 'people/:uid/p/:postId', lazy: page(() => import('./pages/Thread.jsx'), 'threadLoader') },
+                { path: 'hubs/new', lazy: page(() => import('./pages/NewHub.jsx')) },
                 { path: 'feed', lazy: page(() => import('./pages/Feed.jsx'), 'feedLoader') },
-                { path: 'p/:id', lazy: page(() => import('./pages/Thread.jsx'), 'threadLoader') },
-                { path: 'messages', lazy: page(() => import('./pages/Messages.jsx'), 'messagesLoader') },
-                { path: 'messages/:id', lazy: page(() => import('./pages/Messages.jsx'), 'messagesLoader') },
+                { path: 'messages', lazy: page(() => import('./pages/Messages.jsx')) },
+                { path: 'messages/:id', lazy: page(() => import('./pages/Messages.jsx')) },
               ]
             : []),
           { path: '*', element: <NotFound /> },

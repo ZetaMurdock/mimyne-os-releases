@@ -32,6 +32,9 @@
 }
 
 .feed__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
   padding: var(--s-6) 0;
   text-align: center;
 }
