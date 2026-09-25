@@ -73,10 +73,17 @@ export function SessionProvider({ children }) {
       async pledge(hubId) {
         const { pledge } = await import('./api.js');
         await pledge(hubId, user);
+        // Shown at once, whether or not the live list has caught up.
+        setPledged((prev) => new Set(prev).add(hubId));
       },
       async unpledge(hubId) {
         const { unpledge } = await import('./api.js');
         await unpledge(hubId, user.uid);
+        setPledged((prev) => {
+          const next = new Set(prev);
+          next.delete(hubId);
+          return next;
+        });
       },
     };
   }, [status, profile, pledged, signOut]);

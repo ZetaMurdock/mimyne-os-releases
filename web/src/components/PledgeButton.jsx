@@ -4,12 +4,13 @@ import Button from './Button.jsx';
 import { useSession } from '../data/session.jsx';
 
 // Pledge → Pledging → Pledged. Signed out, it asks you to sign in first.
-export default function PledgeButton({ hub, size = 'md', quiet = false, owner = false }) {
+// `pledgedHere`: the page already knows (from the Hub's own member list).
+export default function PledgeButton({ hub, size = 'md', quiet = false, owner = false, pledgedHere = false }) {
   const { user, pledged, pledge, unpledge, signIn } = useSession();
   const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const isPledged = pledged.has(hub.id);
+  const isPledged = pledged.has(hub.id) || pledgedHere;
 
   if (!user) {
     return (
