@@ -68,14 +68,16 @@ export function limitFor(target) {
 }
 
 /**
- * Converts a file off a Hub's shelf. `onStep` hears the stage ('fetch',
+ * Converts a file off a Hub's shelf (or one fetched from a link, carried as
+ * `file.local`). `onStep` hears the stage ('fetch',
  * 'engine', 'convert') and progress 0..1. Resolves to a File.
  */
 export async function convertFile(file, target, onStep = () => {}) {
   if (file.size > limitFor(target)) {
     throw new Error(`That's too big to convert here (${Math.round(limitFor(target) / 1048576)} MB at most for ${target.label}).`);
   }
-  const blob = await fetchWithProgress(await fileLink(file.path), file.size, (p) => onStep('fetch', p));
+  // A file fetched from a link is here already; one on the shelf comes down first.
+  const blob = file.local ?? await fetchWithProgress(await fileLink(file.path), file.size, (p) => onStep('fetch', p));
   const name = `${base(file.name)}${target.suffix ?? ''}.${target.ext}`;
   let out;
   if (target.media) out = await viaFfmpeg(blob, file, target, onStep);
