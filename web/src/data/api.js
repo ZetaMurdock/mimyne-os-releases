@@ -7,6 +7,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, authReady, db } from '../lib/firebase.js';
+import { lookupUsername, readProfile } from './identity.js';
 
 // ------------------------------------------------------------------ shapes
 
@@ -290,14 +291,15 @@ export async function getFeed() {
   const user = await authReady;
   if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
   const uid = user.uid;
-  const [pledgedSnap, buddies] = await Promise.all([
+  const [pledgedSnap, buddies, stalking] = await Promise.all([
     getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).catch(() => ({ docs: [] })),
     getBuddies(uid).catch(() => []),
+    listStalking(uid).catch(() => []),
   ]);
   const pledged = pledgedSnap.docs.map((d) => d.ref.parent.parent.id);
   const scopes = [
     ...pledged.map((hubId) => ({ hubId })),
-    ...[uid, ...buddies].map((profileUid) => ({ profileUid })),
+    ...[...new Set([uid, ...buddies, ...stalking])].map((profileUid) => ({ profileUid })),
   ];
   const [lists, discover, hubs] = await Promise.all([
     Promise.all(scopes.map((s) => listPosts(s, 10))),
@@ -310,6 +312,73 @@ export async function getFeed() {
     buddies,
     hubs,
   };
+}
+
+// ------------------------------------------------------ profiles, stalking
+
+/**
+ * A profile to show: its card (anyone signed in), its page (bio, note,
+ * banner: when its person lets you see it), its posts, and stalkers.
+ */
+export async function getProfile({ uid, name }) {
+  const user = await authReady;
+  if (!user) return { signedOut: true, name: name ?? null };
+  const id = uid ?? (await lookupUsername(name));
+  if (!id) notFound();
+  const card = await readProfile(id).catch(() => null);
+  if (!card) notFound();
+  // Whether their posts can be read is what says whether the profile is
+  // open to you: an account that never set up its page is open to everyone,
+  // and its page document simply isn't there.
+  const [pageSnap, posts, stalkers, stalking] = await Promise.all([
+    readOrMissing(doc(db, 'profile_pages', id)),
+    getDocs(query(postsOf({ profileUid: id }), orderBy('createdAt', 'desc'), limit(30)))
+      .then((snap) => snap.docs.map((d) => cleanPost({ profileUid: id }, d.id, d.data())))
+      .catch((error) => (error?.code === 'permission-denied' ? null : Promise.reject(error))),
+    countStalkers(id),
+    id === user.uid ? false : amStalking(user.uid, id),
+  ]);
+  const page = pageSnap?.data() ?? {};
+  const picture = [page.avatar, card.picture].find((p) => typeof p === 'string' && /^(https:\/\/|data:image\/)/.test(p));
+  const banner = typeof page.banner === 'string' && /^(https:\/\/|data:image\/)/.test(page.banner) ? page.banner : null;
+  return {
+    profile: { ...card, picture: picture ?? null, bio: text(page.bio, 300), note: text(page.note, 500), banner },
+    hidden: posts === null,
+    posts: posts ?? [],
+    stalkers,
+    stalking,
+  };
+}
+
+const stalks = () => collection(db, 'stalks');
+
+async function countStalkers(uid) {
+  try {
+    return (await getCountFromServer(query(stalks(), where('to', '==', uid)))).data().count;
+  } catch {
+    return null;
+  }
+}
+
+// Asked as a query of your own stalks: a read of one that doesn't exist is
+// refused, and a refusal can wedge the Firestore client.
+async function amStalking(me, uid) {
+  const snap = await getDocs(query(stalks(), where('from', '==', me), where('to', '==', uid), limit(1))).catch(() => null);
+  return !!snap && !snap.empty;
+}
+
+/** Who someone stalks, for their feed. */
+export async function listStalking(uid) {
+  const snap = await getDocs(query(stalks(), where('from', '==', uid)));
+  return snap.docs.map((d) => text(d.data().to, 128)).filter(Boolean);
+}
+
+export async function stalk(me, uid) {
+  await setDoc(doc(stalks(), `${me}__${uid}`), { from: me, to: uid, createdAt: serverTimestamp() });
+}
+
+export function unstalk(me, uid) {
+  return deleteDoc(doc(stalks(), `${me}__${uid}`));
 }
 
 // ------------------------------------------------------------- messages
@@ -349,7 +418,14 @@ export function watchMessages(convoId, onChange, onError) {
         from: text(m.from, 128),
         text: text(m.text, 4000),
         files: cleanFiles(m.files),
-        post: m.post && typeof m.post.postId === 'string' ? m.post : null,
+        post: m.post && typeof m.post.postId === 'string'
+          ? { postId: text(m.post.postId, 128), hubId: text(m.post.hubId, 32) || null, profileUid: text(m.post.profileUid, 128) || null }
+          : null,
+        profileUid: text(m.profileUid, 128) || null,
+        replyTo: m.replyTo && typeof m.replyTo.id === 'string'
+          ? { id: text(m.replyTo.id, 128), from: text(m.replyTo.from, 128), text: text(m.replyTo.text, 200) }
+          : null,
+        edited: !!m.editedAt,
         at: millis(m.createdAt),
       };
     })),
@@ -357,12 +433,39 @@ export function watchMessages(convoId, onChange, onError) {
   );
 }
 
-export async function sendMessage(convoId, uid, { text: words, files }) {
+/**
+ * Words, files, a shared post ({hubId | profileUid, postId}) or profile
+ * (profileUid), and optionally the message it answers.
+ */
+export async function sendMessage(convoId, uid, { text: words, files, post, profileUid, replyTo }) {
   await addDoc(collection(db, 'conversations', convoId, 'messages'), withoutEmpty({
-    from: uid, text: words?.trim(), files, createdAt: serverTimestamp(),
+    from: uid,
+    text: words?.trim(),
+    files,
+    post: post ? withoutEmpty({ postId: post.postId, hubId: post.hubId, profileUid: post.profileUid }) : undefined,
+    profileUid,
+    replyTo: replyTo ? withoutEmpty({ id: replyTo.id, from: replyTo.from, text: replyTo.text?.slice(0, 200) }) : undefined,
+    createdAt: serverTimestamp(),
   }));
-  const preview = words?.trim() || (files?.length ? `Sent ${files.length === 1 ? files[0].name : `${files.length} files`}` : '');
+  const preview = words?.trim()
+    || (files?.length ? `Sent ${files.length === 1 ? files[0].name : `${files.length} files`}` : '')
+    || (post ? 'Shared a post' : profileUid ? 'Shared a profile' : '');
   await updateDoc(doc(db, 'conversations', convoId), { lastAt: serverTimestamp(), lastFrom: uid, lastText: preview.slice(0, 200) });
+}
+
+export function editMessage(convoId, messageId, words) {
+  return updateDoc(doc(db, 'conversations', convoId, 'messages', messageId), { text: words.trim(), editedAt: serverTimestamp() });
+}
+
+export function deleteMessage(convoId, messageId) {
+  return deleteDoc(doc(db, 'conversations', convoId, 'messages', messageId));
+}
+
+/** A shared post, for its card in a message: null when it's gone or hidden. */
+export async function getPostCard({ hubId, profileUid, postId }) {
+  const scope = hubId ? { hubId } : { profileUid };
+  const snap = await readOrMissing(postRef(scope, postId));
+  return snap ? cleanPost(scope, snap.id, snap.data()) : null;
 }
 
 /** The one conversation two people have, made the first time it's needed. */

@@ -7,6 +7,7 @@ import Icon from '../components/Icon.jsx';
 import PostCard from '../components/PostCard.jsx';
 import { addComment, deleteComment, getHubPeople, getPost, listComments } from '../data/api.js';
 import { useHubAccess, useSession } from '../data/session.jsx';
+import { notifyComment } from '../data/notifications.js';
 import './Thread.css';
 
 // /h/<hub>/p/<post> for a post on a Hub's Board, /people/<uid>/p/<post> for
@@ -38,7 +39,10 @@ export default function Thread() {
   }
 
   async function reply(parentId, { text, files }) {
-    await addComment(post.scope, post.id, { me: user, text, parentId, files });
+    const ref = await addComment(post.scope, post.id, { me: user, text, parentId, files });
+    // The post's author hears of a comment; a reply goes to whoever it answers.
+    const toUid = parentId ? findComment(comments, parentId)?.authorUid : post.authorUid;
+    notifyComment(user.uid, { scope: post.scope, postId: post.id, commentId: ref.id, parentId, text: text?.trim(), toUid });
     await reload();
   }
 
@@ -90,6 +94,15 @@ export default function Thread() {
       )}
     </div>
   );
+}
+
+function findComment(list, id) {
+  for (const c of list) {
+    if (c.id === id) return c;
+    const found = findComment(c.replies, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 function countAll(list) {

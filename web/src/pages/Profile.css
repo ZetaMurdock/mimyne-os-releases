@@ -1,0 +1,107 @@
+.profile__banner {
+  height: 200px;
+  border-bottom: 1px solid var(--border);
+  background: #121214 center / cover no-repeat;
+}
+
+/* Signed in, the banner runs up under the floating notch. */
+.profile .profile__banner {
+  height: 240px;
+  margin-top: calc(-1 * (var(--notch-h) + 32px));
+}
+
+.profile__identity {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  width: min(var(--page-max), 100% - 32px);
+  margin: -52px auto 0;
+}
+
+.profile__avatar .avatar {
+  box-shadow: 0 0 0 4px var(--bg);
+}
+
+.profile__names {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: var(--s-1);
+  min-width: 0;
+  padding-bottom: 6px;
+}
+
+.profile__name {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile__meta {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.profile__actions {
+  display: flex;
+  gap: var(--s-2);
+  padding-bottom: 6px;
+}
+
+.profile__error {
+  width: min(var(--page-max), 100% - 32px);
+  margin: var(--s-3) auto 0;
+}
+
+.profile .frame {
+  margin-top: var(--s-6);
+}
+
+.profile__note {
+  font-size: 15px;
+}
+
+.profile__bio {
+  font-size: 13px;
+}
+
+.profile-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(520px, 100% - 32px);
+  margin: 96px auto 0;
+  padding: 32px;
+  text-align: center;
+}
+
+.profile-locked h1 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .profile__identity {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-3);
+  }
+
+  .profile__name {
+    font-size: 28px;
+  }
+}
+
+.profile__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-6) 0;
+  text-align: center;
+}

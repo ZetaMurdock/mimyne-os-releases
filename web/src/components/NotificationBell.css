@@ -1,0 +1,110 @@
+.bell {
+  position: relative;
+}
+
+.bell__badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.bell__panel {
+  display: flex;
+  flex-direction: column;
+  width: min(380px, 100vw - 32px);
+}
+
+.bell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.bell__all {
+  font-size: 12px;
+}
+
+.bell__allow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 6px;
+  padding: 9px 10px;
+  border: 1px dashed var(--border-2);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+}
+
+.bell__allow:hover {
+  color: var(--text);
+}
+
+.bell__list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(460px, 70vh);
+  overflow-y: auto;
+}
+
+.bell__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+}
+
+.bell__row:hover {
+  background: var(--hover);
+}
+
+.bell__row.is-unread {
+  color: var(--text);
+}
+
+.bell__row strong {
+  color: var(--text);
+}
+
+.bell__text {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bell__time {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.bell__dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-top: 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}

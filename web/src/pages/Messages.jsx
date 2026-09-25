@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { Avatar, HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
 import Dialog from '../components/Dialog.jsx';
+import Icon from '../components/Icon.jsx';
+import ShareDialog from '../components/ShareDialog.jsx';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
-import { getHubCard, openDirect, sendMessage, watchConversations, watchMessages } from '../data/api.js';
+import {
+  deleteMessage, editMessage, getHubCard, getPostCard, openDirect, postUrl, sendMessage, watchConversations, watchMessages,
+} from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
@@ -126,13 +130,22 @@ function Conversation({ convo, me }) {
   const [progress, setProgress] = useState({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  const [replyTo, setReplyTo] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [forwarding, setForwarding] = useState(null);
   const fileInput = useRef(null);
+  const input = useRef(null);
   const end = useRef(null);
 
   useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load.")), [convo.id]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
+
+  function addFiles(list) {
+    const picked = [...list].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`, file }));
+    setFiles((prev) => [...prev, ...picked].slice(0, 10));
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -142,9 +155,14 @@ function Conversation({ convo, me }) {
     try {
       const labels = [];
       for (const { id, file } of files) labels.push(await uploadFile(file, (p) => setProgress((prev) => ({ ...prev, [id]: p }))));
-      await sendMessage(convo.id, me.uid, { text, files: labels });
+      await sendMessage(convo.id, me.uid, {
+        text,
+        files: labels,
+        replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: replyTo.text || describeAttachment(replyTo) } : null,
+      });
       setText('');
       setFiles([]);
+      setReplyTo(null);
     } catch (err) {
       setError(err.code === 'permission-denied' ? "This message couldn't be sent." : err.message);
     } finally {
@@ -153,28 +171,66 @@ function Conversation({ convo, me }) {
     }
   }
 
+  async function saveEdit(message, words) {
+    setEditing(null);
+    if (!words.trim() || words.trim() === message.text) return;
+    try {
+      await editMessage(convo.id, message.id, words);
+    } catch {
+      setError("That edit didn't save.");
+    }
+  }
+
+  async function remove(message) {
+    if (!window.confirm('Delete this message for everyone?')) return;
+    try {
+      await deleteMessage(convo.id, message.id);
+    } catch {
+      setError("That message couldn't be deleted.");
+    }
+  }
+
   const sharedFiles = messages.flatMap((m) => m.files);
+  const byId = new Map(messages.map((m) => [m.id, m]));
 
   return (
     <>
       <section className="inbox__thread" aria-label={`Conversation with ${title}`}>
         <header className="inbox__head">
-          {icon(36)}
+          {person ? <Link to={`/people/${person.uid}`}>{icon(36)}</Link> : icon(36)}
           <span className="inbox__head-text">
             <span className="inbox__head-title">{title}</span>
-            {person && <span className="inbox__head-sub">@{person.username}</span>}
+            {person && <Link to={`/people/${person.uid}`} className="inbox__head-sub">@{person.username}</Link>}
           </span>
         </header>
 
         <div className="inbox__messages">
           {messages.length === 0 && <p className="muted inbox__none">Say hi.</p>}
           {messages.map((m) => (
-            <Message key={m.id} message={m} mine={m.from === me.uid} group={convo.kind !== 'direct'} />
+            <Message
+              key={m.id}
+              message={m}
+              meUid={me.uid}
+              mine={m.from === me.uid}
+              group={convo.kind !== 'direct'}
+              answered={m.replyTo ? byId.get(m.replyTo.id) : null}
+              editing={editing === m.id}
+              onReply={() => {
+                setReplyTo(m);
+                input.current?.focus();
+              }}
+              onEdit={() => setEditing(m.id)}
+              onSaveEdit={(words) => saveEdit(m, words)}
+              onCancelEdit={() => setEditing(null)}
+              onDelete={() => remove(m)}
+              onForward={() => setForwarding(m)}
+            />
           ))}
           <div ref={end} />
         </div>
 
         <form className="inbox__composer" onSubmit={submit}>
+          {replyTo && <ReplyBar message={replyTo} mine={replyTo.from === me.uid} onCancel={() => setReplyTo(null)} />}
           {files.length > 0 && (
             <div className="inbox__pending">
               {files.map(({ id, file }) => (
@@ -190,19 +246,27 @@ function Conversation({ convo, me }) {
               multiple
               hidden
               onChange={(e) => {
-                const picked = [...e.target.files].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}`, file }));
-                setFiles((list) => [...list, ...picked].slice(0, 10));
+                addFiles(e.target.files);
                 e.target.value = '';
               }}
             />
             <Button variant="ghost" icon="paperclip" iconOnly aria-label="Attach a file" onClick={() => fileInput.current.click()} />
             <input
+              ref={input}
               className="inbox__input"
               aria-label={`Message ${title}`}
               placeholder={`Message ${title}. Any file, any size.`}
               maxLength={4000}
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && replyTo && setReplyTo(null)}
+              // Pictures and GIFs pasted straight in go along as files.
+              onPaste={(e) => {
+                if (e.clipboardData.files.length) {
+                  e.preventDefault();
+                  addFiles(e.clipboardData.files);
+                }
+              }}
             />
             <Button type="submit" variant="primary" icon="send" iconOnly aria-label="Send" loading={sending} />
           </div>
@@ -213,6 +277,11 @@ function Conversation({ convo, me }) {
         <div className="inbox__who">
           {icon(72)}
           <strong>{title}</strong>
+          {person && (
+            <Button size="sm" variant="secondary" to={`/people/${person.uid}`}>
+              View profile
+            </Button>
+          )}
         </div>
         <section className="inbox__side-block">
           <h2 className="label">Files in this chat</h2>
@@ -225,22 +294,163 @@ function Conversation({ convo, me }) {
           ))}
         </section>
       </aside>
+
+      {forwarding && (
+        <ShareDialog
+          title="Forward"
+          payload={{
+            text: forwarding.text,
+            // Only your own uploads can go along: the rules keep each file
+            // in the folder of whoever attached it.
+            files: forwarding.files.filter((f) => f.path.startsWith(`uploads/${me.uid}/`)),
+            post: forwarding.post ?? undefined,
+            profileUid: forwarding.profileUid ?? undefined,
+          }}
+          onClose={() => setForwarding(null)}
+        />
+      )}
     </>
   );
 }
 
-function Message({ message, mine, group }) {
-  const author = usePerson(group && !mine ? message.from : null);
+const describeAttachment = (m) =>
+  m.files?.length ? `📎 ${m.files[0].name}` : m.post ? 'A shared post' : m.profileUid ? 'A shared profile' : '';
+
+function ReplyBar({ message, mine, onCancel }) {
+  const author = usePerson(mine ? null : message.from);
   return (
-    <div className={`msg ${mine ? 'is-mine' : ''}`}>
+    <div className="reply-bar">
+      <Icon name="reply" size={14} />
+      <span className="reply-bar__text">
+        Replying to <strong>{mine ? 'yourself' : author.name}</strong>: {message.text || describeAttachment(message)}
+      </span>
+      <button type="button" className="reply-bar__close" aria-label="Cancel reply" onClick={onCancel}>
+        <Icon name="close" size={14} />
+      </button>
+    </div>
+  );
+}
+
+function Message({ message, meUid, mine, group, answered, editing, onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward }) {
+  const author = usePerson(group && !mine ? message.from : null);
+  const quoted = usePerson(message.replyTo && message.replyTo.from !== meUid ? message.replyTo.from : null);
+  const [draft, setDraft] = useState(message.text);
+
+  return (
+    <div className={`msg ${mine ? 'is-mine' : ''}`} id={`m-${message.id}`}>
       {group && !mine && <span className="msg__author">{author.name}</span>}
-      {message.text && <p className="msg__bubble">{message.text}</p>}
+      {message.replyTo && (
+        <button
+          type="button"
+          className="msg__quote"
+          onClick={() => document.getElementById(`m-${message.replyTo.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+        >
+          <Icon name="reply" size={12} />
+          <span>
+            {message.replyTo.from === meUid ? 'You' : quoted.name}:{' '}
+            {answered ? answered.text || describeAttachment(answered) : message.replyTo.text || 'a deleted message'}
+          </span>
+        </button>
+      )}
+      {editing ? (
+        <form
+          className="msg__edit"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSaveEdit(draft);
+          }}
+        >
+          <input
+            className="inbox__input msg__edit-input"
+            autoFocus
+            maxLength={4000}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && onCancelEdit()}
+            aria-label="Edit message"
+          />
+          <span className="msg__edit-hint">Enter to save · Esc to cancel</span>
+        </form>
+      ) : (
+        message.text && (
+          <p className="msg__bubble">
+            {message.text}
+            {message.edited && <span className="msg__edited"> (edited)</span>}
+          </p>
+        )
+      )}
       {message.files.map((f) => (
         <div key={f.path} className="msg__file">
           <FileCard file={f} compact />
         </div>
       ))}
+      {message.post && <SharedPost post={message.post} />}
+      {message.profileUid && <SharedProfile uid={message.profileUid} />}
+      {!editing && (
+        <div className="msg__tools" role="group" aria-label="Message actions">
+          <button type="button" aria-label="Reply" title="Reply" onClick={onReply}>
+            <Icon name="reply" size={14} />
+          </button>
+          <button type="button" aria-label="Forward" title="Forward" onClick={onForward}>
+            <Icon name="forward" size={14} />
+          </button>
+          {message.text && (
+            <button type="button" aria-label="Copy text" title="Copy text" onClick={() => navigator.clipboard?.writeText(message.text).catch(() => {})}>
+              <Icon name="copy" size={14} />
+            </button>
+          )}
+          {mine && message.text && (
+            <button type="button" aria-label="Edit" title="Edit" onClick={onEdit}>
+              <Icon name="pen" size={14} />
+            </button>
+          )}
+          {mine && (
+            <button type="button" aria-label="Delete" title="Delete" onClick={onDelete}>
+              <Icon name="trash" size={14} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+// A post someone passed on: a small card that opens it.
+function SharedPost({ post }) {
+  const [card, setCard] = useState(undefined);
+  useEffect(() => {
+    let live = true;
+    getPostCard(post).then((c) => live && setCard(c)).catch(() => live && setCard(null));
+    return () => {
+      live = false;
+    };
+  }, [post.postId, post.hubId, post.profileUid]);
+  const author = usePerson(card?.authorUid, card?.authorName);
+  if (card === undefined) return <div className="msg--card msg__shared muted">Loading post…</div>;
+  if (!card) return <div className="msg--card msg__shared muted">This post isn't there any more.</div>;
+  return (
+    <Link to={postUrl(card)} className="msg--card msg__shared">
+      <span className="msg__shared-kind">
+        <Icon name="share" size={12} /> Post by {author.name}
+      </span>
+      {card.title && <strong>{card.title}</strong>}
+      {card.body && <span className="msg__shared-body">{card.body}</span>}
+      {card.files.length > 0 && <span className="muted">📎 {card.files.length === 1 ? card.files[0].name : `${card.files.length} files`}</span>}
+    </Link>
+  );
+}
+
+// A profile someone passed on.
+function SharedProfile({ uid }) {
+  const person = usePerson(uid);
+  return (
+    <Link to={`/people/${uid}`} className="msg--card msg__profile">
+      <Avatar person={person} size={40} />
+      <span className="msg__shared-text">
+        <strong>{person.name}</strong>
+        <span className="muted">@{person.username} · View profile</span>
+      </span>
+    </Link>
   );
 }
 

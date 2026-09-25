@@ -7,6 +7,7 @@ import HubCard from './HubCard.jsx';
 import RoleChip from './RoleChip.jsx';
 import { FileCard } from './FileCard.jsx';
 import { useVotes } from './useVotes.js';
+import ShareDialog from './ShareDialog.jsx';
 import { deletePost, postRef, postUrl } from '../data/api.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
@@ -14,12 +15,16 @@ import { timeAgo } from '../lib/format.js';
 import './PostCard.css';
 
 // `hub` is the Hub the post is on, when it's on one; `roleOf(uid)` gives an
-// author's role there. Images and videos show as files until previews come.
+// author's role there.
 export default function PostCard({ post, hub, roleOf, full = false, showHub = true, canModerate = false, onDeleted }) {
   const { user, signIn } = useSession();
   const author = usePerson(post.authorUid, post.authorName);
-  const votes = useVotes(postRef(post.scope, post.id), { comments: !full });
+  const votes = useVotes(postRef(post.scope, post.id), {
+    comments: !full,
+    about: { scope: post.scope, postId: post.id, authorUid: post.authorUid },
+  });
   const [gone, setGone] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const TitleTag = full ? 'h1' : 'h3';
   const url = postUrl(post);
   const mine = user?.uid === post.authorUid;
@@ -45,9 +50,11 @@ export default function PostCard({ post, hub, roleOf, full = false, showHub = tr
             <span>·</span>
           </>
         ) : (
-          <Avatar person={author} size={22} />
+          <Link to={`/people/${post.authorUid}`} aria-hidden="true" tabIndex={-1}>
+            <Avatar person={author} size={22} />
+          </Link>
         )}
-        <span className="post__author">{author.name}</span>
+        <Link to={`/people/${post.authorUid}`} className="post__author">{author.name}</Link>
         {roleOf && <RoleChip role={roleOf(post.authorUid)} />}
         {!post.scope.hubId && <span>posted to their profile</span>}
         <span>
@@ -78,7 +85,7 @@ export default function PostCard({ post, hub, roleOf, full = false, showHub = tr
             {votes.comments == null ? 'Comments' : `${votes.comments} ${votes.comments === 1 ? 'comment' : 'comments'}`}
           </Button>
         )}
-        <Button icon="share" variant="secondary" className="post__chip" onClick={() => navigator.clipboard?.writeText(location.origin + url).catch(() => {})}>
+        <Button icon="share" variant="secondary" className="post__chip" onClick={() => setSharing(true)}>
           Share
         </Button>
         {(mine || canModerate) && (
@@ -87,6 +94,14 @@ export default function PostCard({ post, hub, roleOf, full = false, showHub = tr
           </Button>
         )}
       </footer>
+      {sharing && (
+        <ShareDialog
+          title="Share this post"
+          link={url}
+          payload={{ post: { postId: post.id, hubId: post.scope.hubId, profileUid: post.scope.profileUid } }}
+          onClose={() => setSharing(false)}
+        />
+      )}
     </article>
   );
 }

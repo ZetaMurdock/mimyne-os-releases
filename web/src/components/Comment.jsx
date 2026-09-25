@@ -1,5 +1,6 @@
 import { doc } from 'firebase/firestore';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Avatar } from './Avatar.jsx';
 import ApproveBar from './ApproveBar.jsx';
 import Button from './Button.jsx';
@@ -21,7 +22,9 @@ export default function Comment({ comment, post, roleOf, canModerate, depth = 0,
   const [replying, setReplying] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const author = usePerson(comment.authorUid, comment.authorName);
-  const votes = useVotes(doc(postRef(post.scope, post.id), 'comments', comment.id));
+  const votes = useVotes(doc(postRef(post.scope, post.id), 'comments', comment.id), {
+    about: { scope: post.scope, postId: post.id, commentId: comment.id, authorUid: comment.authorUid },
+  });
   const replies = showAll ? comment.replies : comment.replies.slice(0, 2);
   const hidden = comment.replies.length - replies.length;
   const mine = user?.uid === comment.authorUid;
@@ -36,7 +39,7 @@ export default function Comment({ comment, post, roleOf, canModerate, depth = 0,
       </div>
       <div className="comment__body">
         <div className="comment__meta">
-          <span className="comment__author">{author.name}</span>
+          <Link to={`/people/${comment.authorUid}`} className="comment__author">{author.name}</Link>
           {roleOf && <RoleChip role={roleOf(comment.authorUid)} />}
           <span>· {timeAgo(comment.at)}</span>
           {collapsed && (
