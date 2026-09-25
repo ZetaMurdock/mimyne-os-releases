@@ -156,7 +156,11 @@ export async function createHub({ id, name, tagline, tag, color, visibility, pos
   try {
     await batch.commit();
   } catch (error) {
-    if (error?.code === 'permission-denied') throw new Error('That address is taken. Try another.');
+    if (error?.code === 'permission-denied') {
+      // A taken address and a refused Hub look the same from here.
+      console.error('Starting a Hub was refused', error);
+      throw new Error("That address may be taken, or Mimyne couldn't start the Hub. Try another address.");
+    }
     throw error;
   }
   return id;
