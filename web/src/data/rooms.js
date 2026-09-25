@@ -16,46 +16,115 @@ function withoutEmpty(data) {
 
 // ------------------------------------------------------------------ rooms
 
-/** A Room's name the way it's written: lowercase, digits and dashes. */
+/** A Room's #tag the way it's written: lowercase, digits and dashes. */
 export function roomName(input) {
   return input.toLowerCase().trim().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-/, '').slice(0, 32);
+}
+
+const WHO = ['everyone', 'pledged', 'mods', 'owner'];
+const who = (value, fallback) => (WHO.includes(value) ? value : fallback);
+
+/** Who may look inside, add notes, and edit everything (see firestore.rules, "rooms"). */
+export function cleanAccess(access) {
+  return { view: who(access?.view, 'everyone'), add: who(access?.add, 'everyone'), edit: who(access?.edit, 'pledged') };
 }
 
 export function watchRooms(hubId, onChange, onError) {
   return onSnapshot(
     query(collection(db, 'hubs', hubId, 'rooms'), orderBy('order', 'asc')),
+    // With pending writes shown: a Room just made is `pending` until the
+    // server has it, and nothing inside it is listened to before then (a
+    // refused listen can wedge the Firestore client).
+    { includeMetadataChanges: true },
     (snap) => onChange(snap.docs.map((d) => {
       const r = d.data();
-      return { id: d.id, name: text(r.name, 32) || d.id, topic: text(r.topic, 200), kind: r.kind === 'announce' ? 'announce' : 'chat', order: r.order ?? 0, createdBy: r.createdBy, createdAt: r.createdAt };
+      return {
+        id: d.id,
+        name: text(r.name, 60) || d.id,
+        tag: text(r.tag, 32) || roomName(text(r.name, 60)) || d.id,
+        topic: text(r.topic, 200),
+        kind: r.kind === 'announce' ? 'announce' : 'chat',
+        order: r.order ?? 0,
+        access: cleanAccess(r.access),
+        editedAt: r.editedAt ? millis(r.editedAt) : null,
+        pending: d.metadata.hasPendingWrites && !r.createdAt?.toMillis,
+        raw: r,
+      };
     })),
     onError,
   );
 }
 
-export async function createRoom(hubId, { name, topic, kind = 'chat', order = 0 }, uid) {
-  const clean = roomName(name);
-  if (!clean) throw new Error('Give the Room a name.');
-  const id = clean === 'general' ? 'general' : `${clean.slice(0, 34)}-${Math.random().toString(36).slice(2, 6)}`;
-  await setDoc(doc(db, 'hubs', hubId, 'rooms', id), withoutEmpty({
-    name: clean, topic: topic?.trim().slice(0, 200), kind, order, createdBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  }));
+function roomFields({ name, tag, topic, kind, order, access }) {
+  const cleanName = name.trim().slice(0, 60);
+  if (!cleanName) throw new Error('Give the Room a name.');
+  const acc = cleanAccess(access);
+  return withoutEmpty({
+    name: cleanName,
+    tag: roomName(tag || cleanName) || undefined,
+    topic: topic?.trim().slice(0, 200),
+    kind,
+    order,
+    // Left out when it's all the usual, so older Rooms and new ones read alike.
+    access: acc.view === 'everyone' && acc.add === 'everyone' && acc.edit === 'pledged' ? undefined : acc,
+  });
+}
+
+export async function createRoom(hubId, { name, tag, topic, kind = 'chat', order = 0, access }, uid) {
+  const fields = roomFields({ name, tag, topic, kind, order, access });
+  const slug = fields.tag ?? 'room';
+  const id = slug === 'general' ? 'general' : `${slug.slice(0, 34)}-${Math.random().toString(36).slice(2, 6)}`;
+  await setDoc(doc(db, 'hubs', hubId, 'rooms', id), { ...fields, createdBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   return id;
 }
 
-export function updateRoom(hubId, room, { name, topic, kind, order }) {
-  return setDoc(doc(db, 'hubs', hubId, 'rooms', room.id), withoutEmpty({
-    name: roomName(name ?? room.name) || room.name,
-    topic: (topic ?? room.topic)?.trim().slice(0, 200),
-    kind: kind ?? room.kind,
-    order: order ?? room.order,
-    createdBy: room.createdBy,
-    createdAt: room.createdAt,
-    updatedAt: serverTimestamp(),
-  }));
+export function updateRoom(hubId, room, changes) {
+  const fields = roomFields({
+    name: changes.name ?? room.name,
+    tag: changes.tag ?? room.tag,
+    topic: changes.topic ?? room.topic,
+    kind: changes.kind ?? room.kind,
+    order: changes.order ?? room.order,
+    access: changes.access ?? room.access,
+  });
+  // What only the rules' own stamps may say stays exactly as it was.
+  const keep = Object.fromEntries(['createdBy', 'createdAt', 'editedAt'].filter((k) => room.raw?.[k] !== undefined).map((k) => [k, room.raw[k]]));
+  return setDoc(doc(db, 'hubs', hubId, 'rooms', room.id), { ...fields, ...keep, updatedAt: serverTimestamp() });
 }
 
 export function deleteRoom(hubId, roomId) {
   return deleteDoc(doc(db, 'hubs', hubId, 'rooms', roomId));
+}
+
+// When the canvas last changed, for its card: once a minute at most.
+const stamped = new Map();
+export function stampEdited(hubId, roomId) {
+  const key = `${hubId}/${roomId}`;
+  if (Date.now() - (stamped.get(key) ?? 0) < 60_000) return;
+  stamped.set(key, Date.now());
+  updateDoc(doc(db, 'hubs', hubId, 'rooms', roomId), { editedAt: serverTimestamp() }).catch(() => {});
+}
+
+/**
+ * What someone may do in a Room: view, add notes (and change their own),
+ * edit everything. `level`: 3 owner, 2 mod, 1 pledged, 0 signed in, -1 out.
+ */
+export function roomRights(room, level, canPost) {
+  const need = { everyone: 0, pledged: 1, mods: 2, owner: 3 };
+  const a = room.access ?? cleanAccess(null);
+  const view = a.view === 'everyone' || level >= need[a.view];
+  const add = view && level >= 0 && canPost && level >= need[a.add];
+  const edit = view && level >= 0 && canPost && (level >= need[a.edit] || (level >= 2 && a.edit !== 'owner'));
+  return { view, add, edit };
+}
+
+export function levelIn(hub, user, members, isPledged) {
+  if (!user) return -1;
+  if (hub.ownerId === user.uid) return 3;
+  // The live pledge (from the session) wins over the list loaded with the page.
+  const pledged = isPledged ?? members.some((m) => m.uid === user.uid);
+  if (!pledged) return 0;
+  return members.find((m) => m.uid === user.uid)?.level === 'mod' ? 2 : 1;
 }
 
 // --------------------------------------------------------------- messages
@@ -107,15 +176,15 @@ export function deleteRoomMessage(hubId, roomId, messageId) {
 const HERE_FRESH = 150_000;
 
 /** Marks you as in the Hub now (and in which Room); sent again each minute. */
-export function stampHere(hubId, uid, room) {
-  return setDoc(doc(db, 'hubs', hubId, 'here', uid), withoutEmpty({ at: serverTimestamp(), room })).catch(() => {});
+export function stampHere(hubId, uid, room, writing = false) {
+  return setDoc(doc(db, 'hubs', hubId, 'here', uid), withoutEmpty({ at: serverTimestamp(), room, writing: writing || undefined })).catch(() => {});
 }
 
 export function leaveHere(hubId, uid) {
   return deleteDoc(doc(db, 'hubs', hubId, 'here', uid)).catch(() => {});
 }
 
-/** uid → room, for everyone stamped in the last couple of minutes. */
+/** uid → { room, writing }, for everyone stamped in the last couple of minutes. */
 export function watchHere(hubId, onChange) {
   return onSnapshot(
     collection(db, 'hubs', hubId, 'here'),
@@ -124,7 +193,7 @@ export function watchHere(hubId, onChange) {
       onChange(Object.fromEntries(snap.docs
         .map((d) => [d.id, d.data({ serverTimestamps: 'estimate' })])
         .filter(([, h]) => millis(h.at) > cutoff)
-        .map(([id, h]) => [id, text(h.room, 40) || null])));
+        .map(([id, h]) => [id, { room: text(h.room, 40) || null, writing: h.writing === true }])));
     },
     () => {},
   );

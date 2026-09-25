@@ -142,7 +142,7 @@ export async function discoverHubs(count = 12) {
  * and its owner's own pledge.
  */
 const FIRST_ROOM = (uid) => ({
-  name: 'general', topic: 'Say hi.', kind: 'chat', order: 0, createdBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  name: 'General', tag: 'general', topic: 'Say hi.', kind: 'chat', order: 0, createdBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
 });
 
 export async function createHub({ id, name, tagline, tag, color, visibility, postingPolicy, rules }, me) {
