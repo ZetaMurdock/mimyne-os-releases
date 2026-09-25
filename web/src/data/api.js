@@ -2,11 +2,12 @@
 // app. The rules in the app's repo (firestore.rules, "hubs" and "messages")
 // decide who may do what; this file only asks.
 import {
-  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getCountFromServer, getDoc, getDocs,
+  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
   writeBatch,
 } from 'firebase/firestore';
 import { auth, authReady, db } from '../lib/firebase.js';
+import { countOf, forgetCount } from '../lib/counts.js';
 
 // ------------------------------------------------------------------ shapes
 
@@ -338,12 +339,14 @@ export async function listComments(scope, postId) {
 }
 
 export function addComment(scope, postId, { me, text: words, parentId, files }) {
+  forgetCount(`${postRef(scope, postId).path}/comments`);
   return addDoc(collection(postRef(scope, postId), 'comments'), withoutEmpty({
     authorUid: me.uid, authorName: me.username, text: words?.trim(), parentId, files, createdAt: serverTimestamp(),
   }));
 }
 
 export function deleteComment(scope, postId, commentId) {
+  forgetCount(`${postRef(scope, postId).path}/comments`);
   return deleteDoc(doc(postRef(scope, postId), 'comments', commentId));
 }
 
@@ -355,13 +358,14 @@ export async function getStats(ref, uid, { comments = false, views = false } = {
   const [approvals, mine, commentCount, viewCount] = await Promise.all([
     // An approval written by the app carries no vote field (only a
     // disapproval says 'down'), so approvals are everything else.
+    // A count that couldn't be had shows as unknown, not as 0.
     Promise.all([
-      getCountFromServer(likes).then((s) => s.data().count),
-      getCountFromServer(query(likes, where('vote', '==', 'down'))).then((s) => s.data().count),
-    ]).then(([all, down]) => all - down).catch(() => 0),
+      countOf(`${ref.path}/likes`, likes),
+      countOf(`${ref.path}/likes?down`, query(likes, where('vote', '==', 'down'))),
+    ]).then(([all, down]) => all - down).catch(() => null),
     uid ? getDoc(doc(likes, uid)).then((s) => (s.exists() ? s.data().vote ?? 'up' : null)).catch(() => null) : null,
-    comments ? getCountFromServer(collection(ref, 'comments')).then((s) => s.data().count).catch(() => 0) : null,
-    views ? getCountFromServer(collection(ref, 'views')).then((s) => s.data().count).catch(() => null) : null,
+    comments ? countOf(`${ref.path}/comments`, collection(ref, 'comments')).catch(() => null) : null,
+    views ? countOf(`${ref.path}/views`, collection(ref, 'views')).catch(() => null) : null,
   ]);
   return { approvals, mine, comments: commentCount, views: viewCount };
 }
@@ -379,6 +383,7 @@ export function recordView(post, uid) {
 
 /** 'up', 'down', or null to take a vote back. */
 export function vote(ref, uid, value) {
+  forgetCount(`${ref.path}/likes`);
   const mine = doc(collection(ref, 'likes'), uid);
   return value ? setDoc(mine, { vote: value, createdAt: serverTimestamp() }) : deleteDoc(mine);
 }
@@ -468,7 +473,7 @@ const stalks = () => collection(db, 'stalks');
 
 export async function countStalkers(uid) {
   try {
-    return (await getCountFromServer(query(stalks(), where('to', '==', uid)))).data().count;
+    return await countOf(`stalks?to=${uid}`, query(stalks(), where('to', '==', uid)));
   } catch {
     return null;
   }
@@ -488,10 +493,12 @@ export async function listStalking(uid) {
 }
 
 export async function stalk(me, uid) {
+  forgetCount(`stalks?to=${uid}`);
   await setDoc(doc(stalks(), `${me}__${uid}`), { from: me, to: uid, createdAt: serverTimestamp() });
 }
 
 export function unstalk(me, uid) {
+  forgetCount(`stalks?to=${uid}`);
   return deleteDoc(doc(stalks(), `${me}__${uid}`));
 }
 

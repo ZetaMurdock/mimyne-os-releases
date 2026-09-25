@@ -4,9 +4,10 @@
 // posts. The rules decide what each viewer may read (firestore.rules,
 // "profile pages"); a page shared with buddies only reads as hidden.
 import {
-  addDoc, collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where, writeBatch,
+  addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { authReady, db } from '../lib/firebase.js';
+import { countOf } from '../lib/counts.js';
 import {
   cleanClipComment, cleanPresence, cleanProfilePage, cleanShowcaseCard, cleanSong, MAX_CLIP_COMMENT_CHARS, safePicture,
 } from '../lib/profileShapes.js';
@@ -77,8 +78,8 @@ async function profileVotes(uid) {
   try {
     const likes = collection(db, 'profile_pages', uid, 'likes');
     const [all, down] = await Promise.all([
-      getCountFromServer(likes).then((s) => s.data().count),
-      getCountFromServer(query(likes, where('vote', '==', 'down'))).then((s) => s.data().count),
+      countOf(`profile_pages/${uid}/likes`, likes),
+      countOf(`profile_pages/${uid}/likes?down`, query(likes, where('vote', '==', 'down'))),
     ]);
     return { up: all - down, down };
   } catch {
