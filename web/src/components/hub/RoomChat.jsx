@@ -298,7 +298,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
         <div className="room__locked">
           <Icon name="lock" size={16} />
           <span>Sign in to talk in #{room.name}.</span>
-          <Button size="sm" variant="primary" onClick={onSignIn}>Sign in</Button>
+          <Button size="sm" variant="inverse" onClick={onSignIn}>Sign in</Button>
         </div>
       ) : !canTalk ? (
         <div className="room__locked">
@@ -378,7 +378,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
               style={{ height: `${Math.min(8, Math.max(1, text.split('\n').length)) * 22 + 20}px` }}
             />
             <MediaPicker onEmoji={addEmoji} onPick={sendMedia} placement="up" align="end" />
-            <Button type="submit" variant="primary" icon="send" iconOnly aria-label="Send" loading={sending} disabled={!text.trim() && !files.length} />
+            <Button type="submit" variant="ghost" icon="send" iconOnly aria-label="Send" loading={sending} disabled={!text.trim() && !files.length} />
           </div>
         </form>
       )}
@@ -476,7 +476,7 @@ function RoomMessage({
           {head && (
             <div className="room-msg__head">
               <a href={`/people/${message.from}`} className="room-msg__name" style={nameColor}>{author.name}</a>
-              {role && role.level !== 'member' && <span className="room-msg__badge" style={{ color: role.color, borderColor: `${role.color}55` }}>{role.name}</span>}
+              {role && role.level !== 'member' && <span className="room-msg__badge">{role.name}</span>}
               <time className="room-msg__time" dateTime={new Date(message.at).toISOString()} title={new Date(message.at).toLocaleString()}>
                 {stamp(message.at)}
               </time>
