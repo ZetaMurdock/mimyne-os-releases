@@ -76,6 +76,13 @@ export function SessionProvider({ children }) {
         // Shown at once, whether or not the live list has caught up.
         setPledged((prev) => new Set(prev).add(hubId));
       },
+      // A Hub you're in that your list forgot (pledged before lists existed).
+      async remember(hubId) {
+        if (pledged.has(hubId)) return;
+        const { noteHub } = await import('./api.js');
+        noteHub(user.uid, hubId, true);
+        setPledged((prev) => new Set(prev).add(hubId));
+      },
       async unpledge(hubId) {
         const { unpledge } = await import('./api.js');
         await unpledge(hubId, user.uid);

@@ -2,7 +2,7 @@
 // app. The rules in the app's repo (firestore.rules, "hubs" and "messages")
 // decide who may do what; this file only asks.
 import {
-  addDoc, collection, collectionGroup, deleteDoc, doc, getCountFromServer, getDoc, getDocs,
+  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getCountFromServer, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
   writeBatch,
 } from 'firebase/firestore';
@@ -155,6 +155,7 @@ export async function createHub({ id, name, tagline, tag, color, visibility, pos
   batch.set(doc(db, 'hubs', id, 'members', me.uid), { role: 'owner', level: 'owner', uid: me.uid, name: me.username, joinedAt: serverTimestamp() });
   try {
     await batch.commit();
+    noteHub(me.uid, id, true);
   } catch (error) {
     if (error?.code === 'permission-denied') {
       // A taken address and a refused Hub look the same from here.
@@ -169,28 +170,103 @@ export async function createHub({ id, name, tagline, tag, color, visibility, pos
 export async function pledge(hubId, me) {
   // Already pledged (the list of your Hubs may not have caught up): done.
   const mine = await getDoc(doc(db, 'hubs', hubId, 'members', me.uid)).catch(() => null);
-  if (mine?.exists()) return;
+  if (mine?.exists()) {
+    noteHub(me.uid, hubId, true);
+    return;
+  }
   const roles = await getDocs(query(collection(db, 'hubs', hubId, 'roles'), where('level', '==', 'member'), limit(1)));
   if (roles.empty) throw new Error('This Hub has no member role to pledge into.');
   await setDoc(doc(db, 'hubs', hubId, 'members', me.uid), {
     role: roles.docs[0].id, level: 'member', uid: me.uid, name: me.username, joinedAt: serverTimestamp(),
   });
+  noteHub(me.uid, hubId, true);
 }
 
-export function unpledge(hubId, uid) {
-  return deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
+export async function unpledge(hubId, uid) {
+  await deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
+  noteHub(uid, hubId, false);
 }
 
-/** The ids of every Hub this person pledged to, live. */
+// ------------------------------------------------------- your Hubs, listed
+
+/**
+ * Your own list of the Hubs you pledged to (pledge_lists/<uid>), kept as you
+ * pledge, leave and start Hubs, so the notch and feed have it after a
+ * refresh whether or not the collection-group query (and its index) works.
+ */
+export function noteHub(uid, hubId, pledged) {
+  return setDoc(doc(db, 'pledge_lists', uid), {
+    hubs: pledged ? arrayUnion(hubId) : arrayRemove(hubId),
+    updatedAt: serverTimestamp(),
+  }, { merge: true }).catch(() => {});
+}
+
+function setHubList(uid, ids) {
+  return setDoc(doc(db, 'pledge_lists', uid), { hubs: ids.slice(0, 500), updatedAt: serverTimestamp() }).catch(() => {});
+}
+
+const cleanIds = (list) => (Array.isArray(list) ? list.filter((id) => typeof id === 'string' && /^[a-z0-9-]{3,32}$/.test(id)) : []);
+
+/** Public Hubs you own: found by owner, no collection-group index needed. */
+async function ownedHubs(uid) {
+  const snap = await getDocs(query(collection(db, 'hubs'), where('ownerId', '==', uid), where('visibility', '==', 'public'))).catch(() => ({ docs: [] }));
+  return snap.docs.map((d) => d.id);
+}
+
+/**
+ * The Hubs you pledged to, live, from everything that knows: your own list,
+ * the Hubs you own, and the collection-group query on pledges. When the
+ * query works it's the truth, and your list is set to match it.
+ */
 export function watchMyPledges(uid, onChange) {
-  return onSnapshot(
-    query(collectionGroup(db, 'members'), where('uid', '==', uid)),
-    (snap) => onChange(snap.docs.map((d) => d.ref.parent.parent.id)),
-    // Most often the index this needs isn't deployed yet (firestore.indexes.json
-    // in the app's repo, deployed by `npm run deploy:rules`). Say so where it
-    // can be seen, and keep what's known.
-    (error) => console.error("Mimyne couldn't list the Hubs you pledged to:", error),
+  let listed = [];
+  let owned = [];
+  let found = null; // null: the query hasn't answered (or can't)
+  const emit = () => onChange([...new Set([...(found ?? listed), ...owned])]);
+
+  ownedHubs(uid).then((ids) => {
+    owned = ids;
+    emit();
+  });
+  const stopList = onSnapshot(
+    doc(db, 'pledge_lists', uid),
+    (snap) => {
+      listed = cleanIds(snap.exists() ? snap.data().hubs : []);
+      emit();
+    },
+    () => {},
   );
+  const stopQuery = onSnapshot(
+    query(collectionGroup(db, 'members'), where('uid', '==', uid)),
+    (snap) => {
+      found = snap.docs.map((d) => d.ref.parent.parent.id);
+      const truth = [...new Set([...found, ...owned])].sort();
+      if (truth.join() !== [...listed].sort().join()) setHubList(uid, truth);
+      emit();
+    },
+    // Most often the index this needs isn't deployed yet (firestore.indexes.json
+    // in the app's repo, deployed by `npm run deploy:rules`). Your own list
+    // carries on meanwhile.
+    (error) => console.error("Mimyne couldn't list the Hubs you pledged to (your own list is used instead):", error),
+  );
+  return () => {
+    stopList();
+    stopQuery();
+  };
+}
+
+/** The same, once, for the feed. */
+export async function myHubIds(uid) {
+  const [listSnap, owned, found] = await Promise.all([
+    getDoc(doc(db, 'pledge_lists', uid)).catch(() => null),
+    ownedHubs(uid),
+    getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).then((snap) => snap.docs.map((d) => d.ref.parent.parent.id)).catch((error) => {
+      console.error("Mimyne couldn't list the Hubs you pledged to (your own list is used instead):", error);
+      return null;
+    }),
+  ]);
+  const listed = cleanIds(listSnap?.exists() ? listSnap.data().hubs : []);
+  return [...new Set([...(found ?? listed), ...owned])];
 }
 
 /** A Hub's roles and who holds them, for role chips beside names. */
@@ -339,17 +415,13 @@ export async function getFeed() {
   const user = await authReady;
   if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
   const uid = user.uid;
-  const [pledgedSnap, buddies, stalking, publicHubs] = await Promise.all([
-    getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).catch((error) => {
-      console.error("Mimyne couldn't list the Hubs you pledged to:", error);
-      return { docs: [] };
-    }),
+  const [pledged, buddies, stalking, publicHubs] = await Promise.all([
+    myHubIds(uid),
     getBuddies(uid).catch(() => []),
     listStalking(uid).catch(() => []),
     discoverHubs(12).catch(() => []),
   ]);
   shareBuddyList(uid, buddies);
-  const pledged = pledgedSnap.docs.map((d) => d.ref.parent.parent.id);
   const fof = await buddiesOfBuddies(uid, buddies).catch(() => []);
   const popular = publicHubs.filter((h) => !pledged.includes(h.id)).slice(0, 6);
 
