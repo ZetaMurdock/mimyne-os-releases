@@ -7,6 +7,11 @@ import './Layout.css';
 // Only signed-in people get the notch, so it loads when someone signs in.
 const NotchDock = lazy(() => import('./Notch.jsx'));
 
+// A staging build says so on every page, so nobody mistakes it for the real
+// site. Read from the build settings, not lib/firebase.js, which this page
+// must not load when the social side is off.
+const STAGING = !!import.meta.env.VITE_FIREBASE_PROJECT_ID && import.meta.env.VITE_FIREBASE_PROJECT_ID !== 'mimyne-os';
+
 export default function Layout() {
   const { user } = useSession();
   const { pathname } = useLocation();
@@ -26,6 +31,11 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+      {STAGING && (
+        <div className="app__staging" title="A practice copy of Mimyne with its own accounts and data. Nothing here reaches mimyne.com.">
+          Staging · test data
+        </div>
+      )}
       <footer className="app__footer">
         <span>Mimyne, a Wonderma Corporation product</span>
         <a href="/privacy.html">Privacy</a>
