@@ -4,7 +4,7 @@
 // posts. The rules decide what each viewer may read (firestore.rules,
 // "profile pages"); a page shared with buddies only reads as hidden.
 import {
-  addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where, writeBatch,
+  addDoc, collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { authReady, db } from '../lib/firebase.js';
 import {
@@ -30,7 +30,7 @@ export async function getProfile({ uid, name }) {
   // Whether their posts can be read says whether the profile is open to
   // you: an account that never set up its page is open to everyone, and its
   // page document simply isn't there to read.
-  const [pageSnap, posts, songs, showcase, stalkers, stalking, buddy] = await Promise.all([
+  const [pageSnap, posts, songs, showcase, stalkers, stalking, buddy, votes] = await Promise.all([
     readOrMissing(doc(db, 'profile_pages', id)),
     getDocs(query(postsOf({ profileUid: id }), orderBy('createdAt', 'desc'), limit(30)))
       .then((snap) => snap.docs.map((d) => cleanPost({ profileUid: id }, d.id, d.data())))
@@ -45,6 +45,7 @@ export async function getProfile({ uid, name }) {
     countStalkers(id),
     id === me ? false : amStalking(me, id),
     id === me ? null : buddyState(me, id),
+    profileVotes(id),
   ]);
   const page = pageSnap ? cleanProfilePage(pageSnap.data()) : null;
   // Their chosen picture lives on the public card; a page saved before that
@@ -64,7 +65,25 @@ export async function getProfile({ uid, name }) {
     stalkers,
     stalking,
     buddy,
+    votes,
   };
+}
+
+/**
+ * How the profile itself has been voted: approvals and disapprovals. An
+ * approval written by the app has no vote field; only disapprovals say 'down'.
+ */
+async function profileVotes(uid) {
+  try {
+    const likes = collection(db, 'profile_pages', uid, 'likes');
+    const [all, down] = await Promise.all([
+      getCountFromServer(likes).then((s) => s.data().count),
+      getCountFromServer(query(likes, where('vote', '==', 'down'))).then((s) => s.data().count),
+    ]);
+    return { up: all - down, down };
+  } catch {
+    return { up: 0, down: 0 };
+  }
 }
 
 // ------------------------------------------------------------ right now
