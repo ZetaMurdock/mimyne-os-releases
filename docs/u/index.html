@@ -12,13 +12,13 @@
 <div class="wrap">
 <header class="site">
   <a class="brand" href="../">Mimyne</a>
-  <nav><a href="../">Home</a><a href="../privacy.html">Privacy</a><a href="../terms.html">Terms</a></nav>
+  <nav><a href="../">Home</a><a href="../privacy.html">Privacy</a><a href="../terms.html">Terms</a><a href="../guidelines.html">Guidelines</a></nav>
 </header>
 
 <h1 id="who">A Mimyne profile</h1>
 <p class="lead" id="what">Profiles live inside Mimyne, the desktop workspace and social profile for gamers, creators and game builders: clips, music, what they're playing, and the workspaces they share.</p>
-<p><a class="button" href="https://github.com/ZetaMurdock/mimyne-os-releases/releases/latest">Get Mimyne for Windows and Mac</a></p>
-<p id="how" class="updated">Already have Mimyne? Open it, go to Friends, and add them by username.</p>
+<p><a class="button" data-download="windows" href="https://github.com/ZetaMurdock/mimyne-os-releases/releases/latest">Get Mimyne for Windows</a></p>
+<p id="how" class="updated">Already have Mimyne? Open it, go to Buddies, and add them by username.</p>
 
 <footer class="site">Mimyne · <a href="../privacy.html">Privacy Policy</a> · <a href="../terms.html">Terms of Service</a> · <a href="mailto:mimyne.support@gmail.com">mimyne.support@gmail.com</a></footer>
 </div>
@@ -30,8 +30,9 @@
     if (!/^[A-Za-z0-9_.]{1,32}$/.test(name)) return;
     document.title = '@' + name + ' on Mimyne';
     document.getElementById('who').textContent = '@' + name + ' is on Mimyne';
-    document.getElementById('how').textContent = 'Already have Mimyne? Open it, go to Friends, and add @' + name + '.';
+    document.getElementById('how').textContent = 'Already have Mimyne? Open it, go to Buddies, and add @' + name + '.';
   })();
 </script>
+<script src="../download.js"></script>
 </body>
 </html>
