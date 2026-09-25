@@ -8,6 +8,7 @@ import PledgeButton from '../components/PledgeButton.jsx';
 import PostCard from '../components/PostCard.jsx';
 import RoleChip from '../components/RoleChip.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import ReportDialog from '../components/ReportDialog.jsx';
 import HubClips from '../components/hub/HubClips.jsx';
 import HubFiles from '../components/hub/HubFiles.jsx';
 import HubRooms from '../components/hub/HubRooms.jsx';
@@ -54,6 +55,7 @@ export default function Hub() {
   const setTab = (id, extra = {}) =>
     setParams(Object.fromEntries(Object.entries({ tab: id === 'rooms' ? null : id, ...extra }).filter(([, v]) => v)), { replace: true, preventScrollReset: true });
   const [sharing, setSharing] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const [posts, setPosts] = useState(loadedPosts);
 
   const roleOf = (uid) => roles.find((r) => r.id === members.find((m) => m.uid === uid)?.role) ?? null;
@@ -82,6 +84,9 @@ export default function Hub() {
         <div className="hub__actions">
           <Button icon="share" iconOnly aria-label="Share this Hub" onClick={() => setSharing(true)} />
           <PledgeButton hub={hub} pledgedHere={access.isPledged} />
+          {user && hub.ownerId !== user.uid && (
+            <Button variant="ghost" icon="flag" iconOnly aria-label="Report this Hub" title="Report" onClick={() => setReporting(true)} />
+          )}
         </div>
       </div>
 
@@ -181,6 +186,12 @@ export default function Hub() {
         </aside>
         )}
       </div>
+      {reporting && (
+        <ReportDialog
+          about={{ targetUid: hub.ownerId, kind: 'hub', link: `/h/${hub.id}`, excerpt: [hub.name, hub.tagline].filter(Boolean).join(' · ') }}
+          onClose={() => setReporting(false)}
+        />
+      )}
       {sharing && (
         <ShareDialog
           title={`Share ${hub.name}`}

@@ -1,0 +1,59 @@
+/* Reporting someone, or something they posted. */
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.report__lead {
+  font-size: 14px;
+}
+
+.report__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report__reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: left;
+}
+
+.report__reason:hover {
+  border-color: var(--border-2);
+  color: var(--text);
+}
+
+.report__reason.is-on {
+  border-color: var(--text-3);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.report__dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text-3);
+  border-radius: 50%;
+}
+
+.report__reason.is-on .report__dot {
+  border: 4px solid var(--text);
+}
+
+.report__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

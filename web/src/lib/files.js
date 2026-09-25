@@ -112,6 +112,21 @@ export async function deleteFile(path) {
   });
 }
 
+/**
+ * How much you have stored and may store: { used, limit } in bytes (limit
+ * null when there is none), or null when the file service can't say.
+ */
+export async function myStorage() {
+  if (!auth.currentUser) return null;
+  const res = await fetch(`${FILES_URL}/usage`, {
+    headers: { authorization: `Bearer ${await auth.currentUser.getIdToken()}` },
+    cache: 'no-store',
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data && Number.isFinite(data.used) ? { used: data.used, limit: Number.isFinite(data.limit) ? data.limit : null } : null;
+}
+
 const PULL_MESSAGES = {
   'sign-in-required': 'Sign in to convert from a link.',
 };

@@ -5,6 +5,7 @@ import Button from '../components/Button.jsx';
 import Dialog from '../components/Dialog.jsx';
 import Icon from '../components/Icon.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import ReportDialog from '../components/ReportDialog.jsx';
 import MediaPicker from '../components/MediaPicker.jsx';
 import { StatusLine } from '../components/Presence.jsx';
 import { insertAt, placeCaret } from '../lib/insert.js';
@@ -138,6 +139,7 @@ function Conversation({ convo, me }) {
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
   const [forwarding, setForwarding] = useState(null);
+  const [reporting, setReporting] = useState(null); // a message
   const fileInput = useRef(null);
   const input = useRef(null);
   const end = useRef(null);
@@ -257,6 +259,7 @@ function Conversation({ convo, me }) {
               onCancelEdit={() => setEditing(null)}
               onDelete={() => remove(m)}
               onForward={() => setForwarding(m)}
+              onReport={() => setReporting(m)}
             />
           ))}
           <div ref={end} />
@@ -336,6 +339,9 @@ function Conversation({ convo, me }) {
         </section>
       </aside>
 
+      {reporting && (
+        <ReportDialog about={{ targetUid: reporting.from, kind: 'message', excerpt: reporting.text }} onClose={() => setReporting(null)} />
+      )}
       {forwarding && (
         <ShareDialog
           title="Forward"
@@ -372,7 +378,7 @@ function ReplyBar({ message, mine, onCancel }) {
   );
 }
 
-function Message({ message, meUid, mine, group, answered, editing, onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward }) {
+function Message({ message, meUid, mine, group, answered, editing, onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport }) {
   const author = usePerson(group && !mine ? message.from : null);
   const quoted = usePerson(message.replyTo && message.replyTo.from !== meUid ? message.replyTo.from : null);
   const [draft, setDraft] = useState(message.text);
@@ -449,6 +455,11 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
           {mine && (
             <button type="button" aria-label="Delete" title="Delete" onClick={onDelete}>
               <Icon name="trash" size={14} />
+            </button>
+          )}
+          {!mine && (
+            <button type="button" aria-label="Report" title="Report" onClick={onReport}>
+              <Icon name="flag" size={14} />
             </button>
           )}
         </div>

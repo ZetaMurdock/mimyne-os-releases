@@ -5,6 +5,7 @@ import Icon from './Icon.jsx';
 import Menu, { MenuItem } from './Menu.jsx';
 import NotificationBell from './NotificationBell.jsx';
 import { getHubCard, getHubCards } from '../data/api.js';
+import { amStaff } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
 import { useWebStatusPublisher } from '../data/status.js';
 import './Notch.css';
@@ -89,6 +90,15 @@ function Notch() {
   const [query, setQuery] = useState('');
   const [missing, setMissing] = useState(false);
   const [hubs, setHubs] = useState([]);
+  const [staff, setStaff] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setStaff(false);
+    if (user) amStaff(user.uid).then((yes) => live && setStaff(yes));
+    return () => {
+      live = false;
+    };
+  }, [user?.uid]);
   // The Hubs strip folds away to a count, and stays how it was left.
   const [folded, setFolded] = useState(() => {
     try {
@@ -212,6 +222,7 @@ function Notch() {
         >
           <MenuItem as={Link} to={`/u/${encodeURIComponent(user.username)}`}>Your profile</MenuItem>
           <MenuItem as={Link} to="/hubs/new">Start a Hub</MenuItem>
+          {staff && <MenuItem as={Link} to="/staff/reports">Reports</MenuItem>}
           <MenuItem onClick={signOut}>Sign out</MenuItem>
         </Menu>
         <Menu

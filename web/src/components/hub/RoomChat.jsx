@@ -4,6 +4,7 @@ import Button from '../Button.jsx';
 import Icon from '../Icon.jsx';
 import MediaPicker from '../MediaPicker.jsx';
 import ShareDialog from '../ShareDialog.jsx';
+import ReportDialog from '../ReportDialog.jsx';
 import LinkPreview, { Linkify } from '../LinkPreview.jsx';
 import { SharedPost, SharedProfile } from '../ShareCards.jsx';
 import { FileCard, PendingFile } from '../FileCard.jsx';
@@ -45,6 +46,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
   const [progress, setProgress] = useState({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  const [reporting, setReporting] = useState(null); // a message
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
   const [forwarding, setForwarding] = useState(null);
@@ -280,6 +282,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
               }}
               onDelete={(skipAsk) => remove(m, skipAsk)}
               onForward={() => setForwarding(m)}
+              onReport={() => setReporting(m)}
             />
           </Fragment>
         ))}
@@ -387,6 +390,17 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
         </div>
       )}
 
+      {reporting && (
+        <ReportDialog
+          about={{
+            targetUid: reporting.from,
+            kind: 'message',
+            link: `/h/${hub.id}?tab=rooms&room=${room.id}`,
+            excerpt: reporting.text,
+          }}
+          onClose={() => setReporting(null)}
+        />
+      )}
       {forwarding && (
         <ShareDialog
           title="Forward"
@@ -443,7 +457,7 @@ function RoomText({ text, edited }) {
 
 function RoomMessage({
   message, head, meUid, role, fallbackName, answered, highlight, editing, canModerate, canTalk,
-  onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward,
+  onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport,
 }) {
   const author = usePerson(message.from, fallbackName);
   const mine = message.from === meUid;
@@ -550,6 +564,11 @@ function RoomMessage({
               onClick={(e) => onDelete(e.shiftKey)}
             >
               <Icon name="trash" size={16} />
+            </button>
+          )}
+          {!mine && meUid && (
+            <button type="button" aria-label="Report" title="Report" onClick={onReport}>
+              <Icon name="flag" size={16} />
             </button>
           )}
         </div>

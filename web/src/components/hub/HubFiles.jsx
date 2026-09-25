@@ -3,10 +3,11 @@ import Button from '../Button.jsx';
 import Dialog from '../Dialog.jsx';
 import Icon from '../Icon.jsx';
 import Menu from '../Menu.jsx';
+import ReportDialog from '../ReportDialog.jsx';
 import { shelveFile, unshelveFile, watchHubFiles } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { convertFile, engineReady, familyOf, stopConverting, targetsFor } from '../../lib/convert.js';
-import { downloadFile, fileLink, pullLink, uploadFile } from '../../lib/files.js';
+import { downloadFile, fileLink, myStorage, pullLink, uploadFile } from '../../lib/files.js';
 import { formatBytes, timeAgo } from '../../lib/format.js';
 import './HubFiles.css';
 
@@ -33,9 +34,16 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
   const [uploads, setUploads] = useState([]); // { id, name, size, progress, error }
   const [dragging, setDragging] = useState(false);
   const [job, setJob] = useState(null); // { item, target }
+  const [reporting, setReporting] = useState(null); // an item
   const [links, setLinks] = useState([]); // files fetched from links, not on the shelf yet
   const [link, setLink] = useState('');
   const picker = useRef(null);
+  const [storage, setStorage] = useState(null); // { used, limit } of your own files, everywhere
+  const checkStorage = () => myStorage().then(setStorage, () => {});
+
+  useEffect(() => {
+    if (user) checkStorage();
+  }, [user?.uid]);
 
   useEffect(() => watchHubFiles(hub.id, setItems, () => setError("This Hub's files couldn't load.")), [hub.id]);
 
@@ -56,6 +64,7 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
         const label = await uploadFile(file, (progress) => setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, progress } : u))));
         await shelveFile(hub.id, user.uid, label);
         setUploads((prev) => prev.filter((u) => u.id !== id));
+        checkStorage();
       } catch (err) {
         setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, error: err.code === 'permission-denied' ? "The Hub didn't take it." : err.message } : u)));
       }
@@ -147,6 +156,15 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
           <p className="muted shelf__sub">
             {items ? `${items.length} ${items.length === 1 ? 'file' : 'files'} · ${formatBytes(totalSize)}` : 'Loading…'}
           </p>
+          {canAdd && storage?.limit ? (
+            <p
+              className={`shelf__storage ${storage.used / storage.limit > 0.9 ? 'is-full' : ''}`}
+              title="Everything you've uploaded to Mimyne, in every Hub, post and message"
+            >
+              <span className="shelf__storage-bar"><span style={{ width: `${Math.min(100, (storage.used / storage.limit) * 100)}%` }} /></span>
+              You've used {formatBytes(storage.used)} of {formatBytes(storage.limit)}
+            </p>
+          ) : null}
         </div>
         {canAdd ? (
           <Button icon="upload" onClick={() => picker.current.click()}>Upload</Button>
@@ -261,6 +279,7 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
             canRemove={!!user && (item.by === user.uid || access.canModerate)}
             onConvert={(target) => (user ? setJob({ item, target }) : onSignIn())}
             onRemove={() => remove(item)}
+            onReport={user && item.by !== user.uid ? () => setReporting(item) : null}
             onSignIn={onSignIn}
           />
         ))}
@@ -273,12 +292,18 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
         </div>
       )}
 
+      {reporting && (
+        <ReportDialog
+          about={{ targetUid: reporting.by, kind: 'file', link: `/h/${hub.id}?tab=files`, excerpt: reporting.file.name }}
+          onClose={() => setReporting(null)}
+        />
+      )}
       {job && <ConvertDialog hub={hub} user={user} canAdd={canAdd} item={job.item} target={job.target} onClose={() => setJob(null)} onRetarget={(target) => setJob({ ...job, target })} />}
     </div>
   );
 }
 
-function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
+function Tile({ item, user, canRemove, onConvert, onRemove, onReport, onSignIn }) {
   const { file } = item;
   const by = usePerson(item.by);
   const targets = targetsFor(file);
@@ -315,6 +340,11 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
         {canRemove && (
           <button type="button" className="tile__icon is-danger" aria-label={`Take ${file.name} off the shelf`} title="Take off the shelf" onClick={onRemove}>
             <Icon name="trash" size={16} />
+          </button>
+        )}
+        {onReport && (
+          <button type="button" className="tile__icon" aria-label={`Report ${file.name}`} title="Report" onClick={onReport}>
+            <Icon name="flag" size={16} />
           </button>
         )}
       </div>

@@ -9,6 +9,7 @@ import RoleChip from './RoleChip.jsx';
 import { FileCard } from './FileCard.jsx';
 import { useVotes } from './useVotes.js';
 import ShareDialog from './ShareDialog.jsx';
+import ReportDialog from './ReportDialog.jsx';
 import { LinkedText } from './LinkPreview.jsx';
 import { deletePost, postRef, postUrl, recordView } from '../data/api.js';
 import { usePerson } from '../data/people.js';
@@ -31,6 +32,7 @@ export default function PostCard({ post, hub, roleOf, full = false, showHub = tr
   });
   const [gone, setGone] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const card = useRef(null);
 
   // Seen: most of it in view for a second, once per person.
@@ -125,7 +127,16 @@ export default function PostCard({ post, hub, roleOf, full = false, showHub = tr
             Delete
           </Button>
         )}
+        {user && !mine && (
+          <Button variant="ghost" className="post__chip post__report" icon="flag" iconOnly aria-label="Report this post" title="Report" onClick={() => setReporting(true)} />
+        )}
       </footer>
+      {reporting && (
+        <ReportDialog
+          about={{ targetUid: post.authorUid, kind: 'post', link: url, excerpt: [post.title, post.body].filter(Boolean).join('\n') }}
+          onClose={() => setReporting(false)}
+        />
+      )}
       {sharing && (
         <ShareDialog
           title="Share this post"
