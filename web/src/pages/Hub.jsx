@@ -8,6 +8,7 @@ import PledgeButton from '../components/PledgeButton.jsx';
 import PostCard from '../components/PostCard.jsx';
 import RoleChip from '../components/RoleChip.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import HubClips from '../components/hub/HubClips.jsx';
 import HubFiles from '../components/hub/HubFiles.jsx';
 import HubRooms from '../components/hub/HubRooms.jsx';
 import { Avatar } from '../components/Avatar.jsx';
@@ -29,6 +30,7 @@ export function shouldRevalidate({ currentParams, nextParams, defaultShouldReval
 const TABS = [
   { id: 'rooms', label: 'Rooms', icon: 'hash' },
   { id: 'board', label: 'Board' },
+  { id: 'clips', label: 'Clips', icon: 'video' },
   { id: 'files', label: 'Files', icon: 'folder' },
   { id: 'pledged', label: 'Pledged' },
   { id: 'rules', label: 'Rules' },
@@ -93,7 +95,7 @@ export default function Hub() {
         </div>
       )}
 
-      <div className={`hub__content ${tab === 'rooms' || tab === 'files' ? 'hub__content--wide' : ''}`}>
+      <div className={`hub__content ${['rooms', 'files', 'clips'].includes(tab) ? 'hub__content--wide' : ''}`}>
         <div className="hub__main">
           <div className="tabs" role="tablist" aria-label={`${hub.name} sections`}>
             {TABS.map((t) => (
@@ -128,6 +130,8 @@ export default function Hub() {
               />
             )}
 
+            {tab === 'clips' && <HubClips hub={hub} user={user} access={access} onSignIn={signIn} />}
+
             {tab === 'files' && <HubFiles hub={hub} user={user} access={access} onSignIn={signIn} />}
 
             {tab === 'board' && (
@@ -158,7 +162,7 @@ export default function Hub() {
           </div>
         </div>
 
-        {tab !== 'rooms' && tab !== 'files' && (
+        {!['rooms', 'files', 'clips'].includes(tab) && (
         <aside className="hub__side">
           <section className="card side-card">
             <h2 className="side-card__title">House rules</h2>

@@ -6,9 +6,10 @@ import Icon from '../Icon.jsx';
 import Canvas from '../canvas/Canvas.jsx';
 import RoomChat from './RoomChat.jsx';
 import {
-  createRoom, deleteRoom, leaveHere, levelIn, roomName, roomRights, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
+  clearRoomWorkspace, createRoom, deleteRoom, leaveHere, levelIn, roomIdFor, roomName, roomRights, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
 } from '../../data/rooms.js';
 import { watchCanvas, watchPreview } from '../../data/canvas.js';
+import { linkWorkspace, myAppWorkspaces, watchAppPreview, watchAppWorkspace } from '../../data/appWorkspaces.js';
 import { usePerson } from '../../data/people.js';
 import { watchStatusSettings } from '../../data/status.js';
 import { timeAgo } from '../../lib/format.js';
@@ -66,7 +67,11 @@ export default function HubRooms({ hub, members, roles, roleOf, user, access, ro
   }, [rooms, access.canModerate, user, hub.id]);
 
   const open = roomId && rooms ? rooms.find((r) => r.id === roomId) : null;
-  const rightsOf = (room) => roomRights(room, level, !!access.canPost);
+  // A workspace from the app is shown, never changed, here.
+  const rightsOf = (room) => {
+    const r = roomRights(room, level, !!access.canPost);
+    return room.workspace ? { ...r, add: false, edit: false } : r;
+  };
 
   let body;
   if (roomId && rooms && !open) {
@@ -192,10 +197,11 @@ function RoomTile({ hub, room, rights, roles, members, inside, signedIn, canMode
     <article className={`room-tile ${live ? 'is-live' : ''} ${rights.view ? '' : 'is-locked'}`}>
       <button type="button" className="room-tile__open" onClick={onOpen} aria-label={`Open ${room.name}`} disabled={!rights.view} />
       <div className="room-tile__front">
-        {rights.view ? (room.pending ? <span className="room-tile__blank">Setting up…</span> : <Preview hubId={hub.id} roomId={room.id} />) : (
+        {rights.view ? (room.pending ? <span className="room-tile__blank">Setting up…</span> : room.workspace ? <AppPreview workspaceId={room.workspace} /> : <Preview hubId={hub.id} roomId={room.id} />) : (
           <span className="room-tile__lock"><Icon name="lock" size={14} /> {onlyLabel(room.access.view, roles)}</span>
         )}
         {live && <span className="room-tile__live">● LIVE</span>}
+        {room.workspace && rights.view && <span className="room-tile__app">From the app</span>}
         {canModerate && (
           <button type="button" className="room-tile__gear" aria-label={`Settings for ${room.name}`} title="Room settings" onClick={onSettings}>
             <Icon name="gear" size={14} />
@@ -263,8 +269,19 @@ function Face({ uid, members }) {
 function Preview({ hubId, roomId }) {
   const [nodes, setNodes] = useState(null);
   useEffect(() => watchPreview(hubId, roomId, setNodes), [hubId, roomId]);
+  return <Miniature nodes={nodes} />;
+}
+
+/** An app workspace's front: what its owner published, in miniature. */
+function AppPreview({ workspaceId }) {
+  const [nodes, setNodes] = useState(null);
+  useEffect(() => watchAppPreview(workspaceId, setNodes), [workspaceId]);
+  return <Miniature nodes={nodes} empty="Nothing published yet" />;
+}
+
+function Miniature({ nodes, empty = 'Empty canvas' }) {
   const shown = (nodes ?? []).filter((n) => !n.parentId);
-  if (!shown.length) return <span className="room-tile__blank">{nodes ? 'Empty canvas' : ''}</span>;
+  if (!shown.length) return <span className="room-tile__blank">{nodes ? empty : ''}</span>;
   const boxes = shown.map((n) => {
     const w = n.style.width ?? (n.type === 'list' ? 272 : n.type === 'file' ? 280 : 220);
     const cards = nodes.filter((c) => c.parentId === n.id).length;
@@ -310,10 +327,19 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
   chatHeightRef.current = chatHeight;
 
   const ready = rights.view && !room.pending;
+  const [app, setApp] = useState(null); // an app workspace's name and owner
   useEffect(() => {
     if (!ready) return undefined;
+    if (room.workspace) {
+      setNodes(null);
+      return watchAppWorkspace(room.workspace, (data) => {
+        setApp({ name: data.name, ownerId: data.ownerId, sharing: data.sharing });
+        setNodes(data.nodes);
+        setEdges(data.edges);
+      }, () => setError("This workspace can't be shown here right now. Its owner may have taken it out of this Room."));
+    }
     return watchCanvas(hub.id, room.id, setNodes, setEdges, () => setError("This Room's canvas couldn't load."));
-  }, [hub.id, room.id, ready]);
+  }, [hub.id, room.id, ready, room.workspace]);
   useEffect(() => (ready ? watchLatest(hub.id, room.id, setLatest) : undefined), [hub.id, room.id, ready]);
   useEffect(() => {
     if (show.chat) setSeenAt(Date.now());
@@ -373,7 +399,9 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
             {inside.length > 5 && <span className="room-view__more">+{inside.length - 5}</span>}
           </span>
         )}
-        {rights.view && user && <span className="room-tile__access">{rightsLabel(rights)}</span>}
+        {room.workspace ? (
+          <span className="room-tile__access" title={app ? `${app.name}, from the Mimyne app` : 'From the Mimyne app'}>From the app · view only</span>
+        ) : rights.view && user && <span className="room-tile__access">{rightsLabel(rights)}</span>}
         <div className="room-view__layout" role="group" aria-label="Show">
           <button type="button" className={show.canvas ? 'is-on' : ''} aria-pressed={show.canvas} onClick={() => toggle('canvas')}>
             <Icon name="layout" size={15} /> Canvas
@@ -403,8 +431,17 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
                 <p className="form-error">{error}</p>
               ) : nodes === null ? (
                 <div className="room-view__loading">Loading the canvas…</div>
+              ) : room.workspace && nodes.length === 0 ? (
+                <div className="room-view__loading room-view__app-empty">
+                  <strong>{app?.name ?? 'This workspace'}</strong>
+                  <span>
+                    Nothing from it is published yet.{' '}
+                    {app?.ownerId === user?.uid ? 'In the Mimyne app, open the workspace and turn on sharing; it shows here as it changes.' : 'It shows here once its owner turns on sharing in the app.'}
+                  </span>
+                </div>
               ) : (
                 <Canvas
+                  key={room.workspace ?? 'canvas'}
                   nodes={nodes}
                   edges={edges}
                   rights={user ? rights : { view: true, add: false, edit: false }}
@@ -496,6 +533,15 @@ function RoomDialog({ hub, room, rooms, roles, user, onClose, onMade, onDeleted 
   const [acc, setAcc] = useState(room?.access ?? { view: 'everyone', add: 'everyone', edit: 'pledged' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // What's inside: a canvas made here, or a workspace from the app.
+  const [inside, setInside] = useState(room?.workspace ? 'app' : 'canvas');
+  const [workspaces, setWorkspaces] = useState(null);
+  const [workspace, setWorkspace] = useState(room?.workspace ?? '');
+  useEffect(() => {
+    if (inside !== 'app' || workspaces || !user) return;
+    myAppWorkspaces(user.uid).then(setWorkspaces).catch(() => setWorkspaces([]));
+  }, [inside, workspaces, user]);
+  const picked = workspaces?.find((w) => w.id === workspace);
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const options = (what) => [
     { id: 'everyone', label: what === 'view' ? (hub.visibility === 'public' ? 'Anyone' : 'Everyone in the Hub') : 'Anyone who can post here' },
@@ -507,15 +553,28 @@ function RoomDialog({ hub, room, rooms, roles, user, onClose, onMade, onDeleted 
   async function save(event) {
     event.preventDefault();
     if (!name.trim()) return setError('Give the Room a name.');
+    if (inside === 'app' && !workspace) return setError('Pick one of your workspaces from the app.');
     setBusy(true);
     setError(null);
     try {
-      const fields = { name, tag: tag || name, topic, kind, access: acc };
-      if (room) await updateRoom(hub.id, room, fields);
-      else onMade(await createRoom(hub.id, { ...fields, order: Math.min(99, rooms.length) }, user.uid));
+      const fields = { name, tag: tag || name, topic, kind, access: acc, workspace: inside === 'app' ? workspace : null };
+      // A workspace already shown in another Room moves: that Room lets go of it.
+      const was = inside === 'app' ? picked?.hubRoom : null;
+      if (was && !(was.hub === hub.id && was.room === room?.id)) await clearRoomWorkspace(was.hub, was.room).catch(() => {});
+      if (room) {
+        // Taking a workspace out, or putting another in: each side says so.
+        if (room.workspace && room.workspace !== fields.workspace) await linkWorkspace(room.workspace, null).catch(() => {});
+        if (fields.workspace && fields.workspace !== room.workspace) await linkWorkspace(fields.workspace, hub.id, room.id);
+        await updateRoom(hub.id, room, fields);
+      } else {
+        const id = roomIdFor(tag || name);
+        // The workspace points here first, so the Room can show it the moment it exists.
+        if (fields.workspace) await linkWorkspace(fields.workspace, hub.id, id);
+        onMade(await createRoom(hub.id, { ...fields, id, order: Math.min(99, rooms.length) }, user.uid));
+      }
       onClose();
     } catch (err) {
-      setError(err.message?.startsWith('Give') ? err.message : "That didn't save. Only the owner and mods set up Rooms.");
+      setError(err.message?.startsWith('Give') ? err.message : "That didn't save. Only the owner and mods set up Rooms, and only a workspace's owner can show it in one.");
       setBusy(false);
     }
   }
@@ -558,6 +617,42 @@ function RoomDialog({ hub, room, rooms, roles, user, onClose, onMade, onDeleted 
             </span>
           </label>
         </div>
+        <div className="room-form__kinds" role="radiogroup" aria-label="What's inside">
+          {[
+            { id: 'canvas', icon: 'layout', title: 'A canvas', note: 'Notes, files, lists and arrows, made here together' },
+            { id: 'app', icon: 'eye', title: 'A workspace from the app', note: 'One of yours, shown here view only, as you change it in the app' },
+          ].map((k) => (
+            <button key={k.id} type="button" role="radio" aria-checked={inside === k.id} className={`room-form__kind ${inside === k.id ? 'is-on' : ''}`} onClick={() => setInside(k.id)}>
+              <Icon name={k.icon} size={18} />
+              <span>
+                <strong>{k.title}</strong>
+                <span className="muted">{k.note}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        {inside === 'app' && (
+          <label className="field">
+            Workspace
+            {workspaces === null ? (
+              <span className="muted room-form__hint">Finding your workspaces…</span>
+            ) : workspaces.length === 0 ? (
+              <span className="muted room-form__hint">You don't have workspaces synced from the app yet. Sign in to the app with this account first.</span>
+            ) : (
+              <select className="field__input" value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
+                <option value="">Pick one</option>
+                {workspaces.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}{w.hubRoom && w.id !== room?.workspace ? ' (in another Room; moves here)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {picked && !picked.sharing && (
+              <span className="room-form__hint room-form__warn">Sharing is off for it in the app, so nothing shows yet. Turn it on from the workspace's Share menu.</span>
+            )}
+          </label>
+        )}
         <label className="field">
           What it's for
           <input className="field__input" value={topic} maxLength={200} placeholder="Maps, blockouts and playtest notes" onChange={(e) => setTopic(e.target.value)} />

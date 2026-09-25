@@ -50,6 +50,8 @@ const paths = {
   arrowRight: <><path d="M4 12h15" /><path d="m13 6 6 6-6 6" /></>,
   layout: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 14h18" /></>,
   minimize: <path d="M6 12h12" />,
+  undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></>,
+  redo: <><path d="m15 14 5-5-5-5" /><path d="M20 9H10a6 6 0 0 0 0 12h3" /></>,
   copy: <><rect x="8" y="8" width="13" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></>,
 };
 
