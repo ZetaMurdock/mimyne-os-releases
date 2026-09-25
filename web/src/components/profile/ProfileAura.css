@@ -1,0 +1,219 @@
+.aura {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: none;
+  animation: aura-out 4.6s linear both;
+}
+
+@keyframes aura-out {
+  0%, 82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Stars: streaks shooting down and to the left, and sparkles twinkling. */
+.aura__shoot {
+  position: absolute;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #fff 0%, rgba(255, 247, 214, 0.9) 12%, rgba(196, 181, 253, 0.35) 55%, transparent 100%);
+  box-shadow: 0 0 10px rgba(255, 247, 214, 0.8);
+  opacity: 0;
+  transform-origin: left center;
+  animation: aura-shoot 1s cubic-bezier(0.3, 0.1, 0.4, 1) both;
+}
+
+.aura__shoot::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 12px 3px rgba(255, 247, 214, 0.9);
+  transform: translateY(-50%);
+}
+
+@keyframes aura-shoot {
+  0% { opacity: 0; transform: rotate(145deg) translateX(0) scaleX(0.3); }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(145deg) translateX(calc(-1 * var(--travel))) scaleX(1); }
+}
+
+.aura__sparkle {
+  position: absolute;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: aura-twinkle 1.2s ease-in-out both;
+}
+
+@keyframes aura-twinkle {
+  0% { opacity: 0; transform: scale(0) rotate(0deg); }
+  45% { opacity: 1; transform: scale(1.15) rotate(45deg); }
+  100% { opacity: 0; transform: scale(0.2) rotate(90deg); }
+}
+
+/* The app's sparks bursting here and there. */
+.aura__burst {
+  position: absolute;
+  max-width: none;
+  opacity: 0;
+  animation: aura-burst 0.9s ease-out both;
+}
+
+@keyframes aura-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--turn)) scale(0.3); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(calc(var(--turn) + 20deg)) scale(1.4); }
+}
+
+/* Its shards drifting down, turning as they fall. */
+.aura__shard {
+  position: absolute;
+  top: -6%;
+  max-width: none;
+  opacity: 0;
+  animation: aura-shard 2.6s cubic-bezier(0.35, 0, 0.65, 1) both;
+}
+
+@keyframes aura-shard {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  12% { opacity: 1; }
+  85% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(var(--sway), 110vh) rotate(var(--spin)); }
+}
+
+/* The crown: up from below the middle, a hop, and it hangs there glowing. */
+.aura__crown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(34vw, 260px);
+  transform: translate(-50%, -50%);
+}
+
+.aura__crown-img,
+.aura__crown-sparks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  opacity: 0;
+}
+
+.aura__crown-img {
+  width: 100%;
+  filter: drop-shadow(0 0 28px rgba(242, 184, 75, 0.7));
+  animation: aura-crown 2.8s cubic-bezier(0.2, 0.9, 0.3, 1) 0.9s both;
+}
+
+.aura__crown-sparks {
+  width: 190%;
+  animation: aura-crown-sparks 2.2s ease-out 1.05s both;
+}
+
+@keyframes aura-crown {
+  0% { opacity: 0; transform: translate(-50%, 20%) scale(0.3) rotate(-10deg); }
+  22% { opacity: 1; transform: translate(-50%, -70%) scale(1.12) rotate(3deg); }
+  34% { transform: translate(-50%, -55%) scale(0.97) rotate(0deg); }
+  80% { opacity: 1; transform: translate(-50%, -60%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -85%) scale(0.92); }
+}
+
+@keyframes aura-crown-sparks {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-8deg); }
+  25% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate(-50%, -62%) scale(1.25) rotate(6deg); }
+}
+
+/* Splats: brown splotches landing all over, then the big one sliding down. */
+.aura__splot {
+  position: absolute;
+  max-width: none;
+  opacity: 0;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+  animation: aura-splot 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+@keyframes aura-splot {
+  0% { opacity: 0; transform: rotate(var(--turn)) scale(1.8); }
+  60% { opacity: 1; transform: rotate(var(--turn)) scale(0.88, 1.08); }
+  100% { opacity: 0.92; transform: rotate(var(--turn)) scale(1); }
+}
+
+.aura__big {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(58vw, 480px);
+  height: 100vh;
+  transform: translateX(-50%);
+}
+
+.aura__big-splat {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-width: none;
+  opacity: 0;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.55));
+  animation: aura-big 3s cubic-bezier(0.45, 0, 0.55, 1) 1.5s both;
+}
+
+@keyframes aura-big {
+  0% { opacity: 0; transform: translateY(-60%) scale(1.3); }
+  10% { opacity: 1; transform: translateY(-8%) scale(1.08, 0.88); }
+  18% { opacity: 1; transform: translateY(-4%) scale(0.97, 1.05); }
+  28% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 1; transform: translateY(calc(100vh - 20%)) scale(0.96, 1.08); }
+}
+
+/* Bits flung off as it lands, falling as they go. */
+.aura__drop {
+  position: absolute;
+  top: 16%;
+  border-radius: 50%;
+  background: #5c421a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  animation: aura-drop 0.9s cubic-bezier(0.15, 0.7, 0.35, 1) both;
+}
+
+@keyframes aura-drop {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+  12% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--fly-x), var(--fly-y)) scale(0.6); }
+}
+
+/* The smear it leaves on the way down. */
+.aura__trail {
+  position: absolute;
+  top: 12%;
+  left: 26%;
+  width: 48%;
+  height: 88%;
+  border-radius: 45% 45% 50% 50% / 8% 8% 30% 30%;
+  background: linear-gradient(to bottom, rgba(92, 66, 26, 0.8), rgba(92, 66, 26, 0.5) 65%, rgba(92, 66, 26, 0));
+  /* Soft at the sides, like something wet dragged down the glass. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+  filter: blur(1.5px);
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: top center;
+  animation: aura-trail 2.2s cubic-bezier(0.45, 0, 0.55, 1) 2.35s both;
+}
+
+@keyframes aura-trail {
+  0% { opacity: 0.9; transform: scaleY(0); }
+  100% { opacity: 0.9; transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura { display: none; }
+}

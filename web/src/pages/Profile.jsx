@@ -11,6 +11,7 @@ import ShareDialog from '../components/ShareDialog.jsx';
 import MedalClips, { MedalClipsPage } from '../components/profile/MedalClips.jsx';
 import { NowPlayingCard } from '../components/profile/NowPlaying.jsx';
 import SongsPlayer from '../components/profile/SongsPlayer.jsx';
+import ProfileAura from '../components/profile/ProfileAura.jsx';
 import { useVotes } from '../components/useVotes.js';
 import { AvatarWithStatus, StatusControls, StatusLine } from '../components/Presence.jsx';
 import { createPost, openDirect, stalk, unstalk } from '../data/api.js';
@@ -50,7 +51,7 @@ function SignedOutProfile({ name }) {
   );
 }
 
-function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, stalkers, stalking: wasStalking, buddy: buddyAt }) {
+function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, stalkers, stalking: wasStalking, buddy: buddyAt, votes }) {
   const { user } = useSession();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -118,6 +119,7 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
 
   return (
     <div className={`profile ${background ? 'profile--backdrop' : ''}`}>
+      {!hidden && <ProfileAura votes={votes} seed={profile.uid} />}
       {/* Their page background fills the screen behind the profile, the way a
           Steam profile's does, framed the way its owner framed it. */}
       {background && (
