@@ -8,7 +8,7 @@ import { notifyVote } from '../data/notifications.js';
 // background.
 // `about` ({scope, postId, commentId?, authorUid}) says whose it is, so a
 // vote can tell them.
-export function useVotes(ref, { comments = false, about = null } = {}) {
+export function useVotes(ref, { comments = false, about = null, onVoted = null } = {}) {
   const { user, signIn } = useSession();
   const [stats, setStats] = useState({ approvals: null, mine: null, comments: null });
   const key = ref?.path;
@@ -35,6 +35,7 @@ export function useVotes(ref, { comments = false, about = null } = {}) {
     try {
       await vote(ref, user.uid, next);
       if (about && next) notifyVote(user.uid, { ...about, vote: next });
+      if (next) onVoted?.(next);
     } catch {
       setStats(before);
     }

@@ -7,7 +7,6 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, authReady, db } from '../lib/firebase.js';
-import { lookupUsername, readProfile } from './identity.js';
 
 // ------------------------------------------------------------------ shapes
 
@@ -38,7 +37,7 @@ function cleanFiles(files) {
     .map((f) => ({ name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path }));
 }
 
-function cleanPost(scope, id, data) {
+export function cleanPost(scope, id, data) {
   return {
     id,
     scope,
@@ -70,13 +69,13 @@ function withoutEmpty(data) {
   return Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)));
 }
 
-function notFound() {
+export function notFound() {
   throw new Response('Not found', { status: 404 });
 }
 
 // A read the rules refuse (a private Hub, a profile that isn't shared with
 // you) looks the same to a visitor as one that doesn't exist.
-async function readOrMissing(ref) {
+export async function readOrMissing(ref) {
   try {
     const snap = await getDoc(ref);
     return snap.exists() ? snap : null;
@@ -266,7 +265,12 @@ export function deleteComment(scope, postId, commentId) {
 export async function getStats(ref, uid, { comments = false } = {}) {
   const likes = collection(ref, 'likes');
   const [approvals, mine, commentCount] = await Promise.all([
-    getCountFromServer(query(likes, where('vote', '==', 'up'))).then((s) => s.data().count).catch(() => 0),
+    // An approval written by the app carries no vote field (only a
+    // disapproval says 'down'), so approvals are everything else.
+    Promise.all([
+      getCountFromServer(likes).then((s) => s.data().count),
+      getCountFromServer(query(likes, where('vote', '==', 'down'))).then((s) => s.data().count),
+    ]).then(([all, down]) => all - down).catch(() => 0),
     uid ? getDoc(doc(likes, uid)).then((s) => (s.exists() ? s.data().vote ?? 'up' : null)).catch(() => null) : null,
     comments ? getCountFromServer(collection(ref, 'comments')).then((s) => s.data().count).catch(() => 0) : null,
   ]);
@@ -316,43 +320,9 @@ export async function getFeed() {
 
 // ------------------------------------------------------ profiles, stalking
 
-/**
- * A profile to show: its card (anyone signed in), its page (bio, note,
- * banner: when its person lets you see it), its posts, and stalkers.
- */
-export async function getProfile({ uid, name }) {
-  const user = await authReady;
-  if (!user) return { signedOut: true, name: name ?? null };
-  const id = uid ?? (await lookupUsername(name));
-  if (!id) notFound();
-  const card = await readProfile(id).catch(() => null);
-  if (!card) notFound();
-  // Whether their posts can be read is what says whether the profile is
-  // open to you: an account that never set up its page is open to everyone,
-  // and its page document simply isn't there.
-  const [pageSnap, posts, stalkers, stalking] = await Promise.all([
-    readOrMissing(doc(db, 'profile_pages', id)),
-    getDocs(query(postsOf({ profileUid: id }), orderBy('createdAt', 'desc'), limit(30)))
-      .then((snap) => snap.docs.map((d) => cleanPost({ profileUid: id }, d.id, d.data())))
-      .catch((error) => (error?.code === 'permission-denied' ? null : Promise.reject(error))),
-    countStalkers(id),
-    id === user.uid ? false : amStalking(user.uid, id),
-  ]);
-  const page = pageSnap?.data() ?? {};
-  const picture = [page.avatar, card.picture].find((p) => typeof p === 'string' && /^(https:\/\/|data:image\/)/.test(p));
-  const banner = typeof page.banner === 'string' && /^(https:\/\/|data:image\/)/.test(page.banner) ? page.banner : null;
-  return {
-    profile: { ...card, picture: picture ?? null, bio: text(page.bio, 300), note: text(page.note, 500), banner },
-    hidden: posts === null,
-    posts: posts ?? [],
-    stalkers,
-    stalking,
-  };
-}
-
 const stalks = () => collection(db, 'stalks');
 
-async function countStalkers(uid) {
+export async function countStalkers(uid) {
   try {
     return (await getCountFromServer(query(stalks(), where('to', '==', uid)))).data().count;
   } catch {
@@ -362,7 +332,7 @@ async function countStalkers(uid) {
 
 // Asked as a query of your own stalks: a read of one that doesn't exist is
 // refused, and a refusal can wedge the Firestore client.
-async function amStalking(me, uid) {
+export async function amStalking(me, uid) {
   const snap = await getDocs(query(stalks(), where('from', '==', me), where('to', '==', uid), limit(1))).catch(() => null);
   return !!snap && !snap.empty;
 }
