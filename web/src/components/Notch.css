@@ -149,6 +149,40 @@
   gap: 6px;
 }
 
+.notch__fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notch__fold:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.notch__fold-chev {
+  transform: rotate(90deg);
+  transition: transform var(--d-press) ease;
+}
+
+.notch__hubs.is-folded .notch__fold-chev {
+  transform: rotate(-90deg);
+}
+
+.notch__hubs.is-folded .notch__fold {
+  padding: 0 10px;
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+}
+
 .notch__hub {
   position: relative;
   display: inline-flex;

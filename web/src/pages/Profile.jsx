@@ -12,6 +12,7 @@ import MedalClips, { MedalClipsPage } from '../components/profile/MedalClips.jsx
 import { NowPlayingCard } from '../components/profile/NowPlaying.jsx';
 import SongsPlayer from '../components/profile/SongsPlayer.jsx';
 import { useVotes } from '../components/useVotes.js';
+import { AvatarWithStatus, StatusControls, StatusLine } from '../components/Presence.jsx';
 import { createPost, openDirect, stalk, unstalk } from '../data/api.js';
 import { notifyProfileLike, notifyStalk } from '../data/notifications.js';
 import { acceptBuddy, askBuddy, cancelBuddyRequest, getProfile, watchPresence } from '../data/profile.js';
@@ -143,7 +144,7 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
 
       <div className="profile__identity">
         <span className="profile__avatar">
-          <Avatar person={profile} size={104} />
+          <AvatarWithStatus person={profile} size={104} />
         </span>
         <div className="profile__names">
           <h1 className="profile__name">{profile.displayName || profile.username}</h1>
@@ -154,6 +155,7 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
             {count > 0 && <span className={stalking ? 'profile__stalkers is-mine' : 'profile__stalkers'}>{count} {count === 1 ? 'stalker' : 'stalkers'}</span>}
             {!hidden && <ProfileVotes uid={profile.uid} mine={mine} />}
           </div>
+          {!hidden && <StatusLine uid={profile.uid} />}
         </div>
         <div className="profile__actions">
           <Button icon="share" iconOnly aria-label="Share this profile" onClick={() => setSharing(true)} />
@@ -225,6 +227,7 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
           </div>
 
           <aside className="frame__side">
+            {mine && <StatusControls />}
             {(presence.playing || presence.listening) && (
               <section className="profile__section" aria-label="Right now">
                 {presence.playing && (

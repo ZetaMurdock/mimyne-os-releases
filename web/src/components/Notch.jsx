@@ -6,6 +6,7 @@ import Menu, { MenuItem } from './Menu.jsx';
 import NotificationBell from './NotificationBell.jsx';
 import { getHubCard, getHubCards } from '../data/api.js';
 import { useSession } from '../data/session.jsx';
+import { useWebStatusPublisher } from '../data/status.js';
 import './Notch.css';
 
 // Between pages the notch drops, squashes into the Mimyne title and holds
@@ -88,6 +89,24 @@ function Notch() {
   const [query, setQuery] = useState('');
   const [missing, setMissing] = useState(false);
   const [hubs, setHubs] = useState([]);
+  // The Hubs strip folds away to a count, and stays how it was left.
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem('mimyne.notchHubsFolded') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const fold = () =>
+    setFolded((was) => {
+      try {
+        localStorage.setItem('mimyne.notchHubsFolded', was ? '0' : '1');
+      } catch {
+        // Not remembered: fine.
+      }
+      return !was;
+    });
+  useWebStatusPublisher(user?.uid);
   useSquashGeometry(bar, title);
 
   const { pathname, search } = useLocation();
@@ -140,15 +159,31 @@ function Notch() {
 
         <span className="notch__divider" />
 
-        <div className="notch__hubs" role="group" aria-label="Hubs you pledge to">
-          {hubs.map((hub) => (
-            <NavLink key={hub.id} to={`/h/${hub.id}`} className="notch__hub" aria-label={hub.name} title={hub.name}>
-              <HubIcon hub={hub} size={32} />
-            </NavLink>
-          ))}
-          <Link to="/hubs/new" className="notch__add" aria-label="Start a Hub" title="Start a Hub">
-            <Icon name="plus" size={14} strokeWidth={2.2} />
-          </Link>
+        <div className={`notch__hubs ${folded ? 'is-folded' : ''}`} role="group" aria-label="Hubs you pledge to">
+          <button
+            type="button"
+            className="notch__fold"
+            onClick={fold}
+            aria-expanded={!folded}
+            aria-label={folded ? 'Show your Hubs' : 'Fold your Hubs away'}
+            title={folded ? 'Show your Hubs' : 'Fold your Hubs away'}
+          >
+            {folded ? (
+              <span className="notch__fold-count">{hubs.length} {hubs.length === 1 ? 'Hub' : 'Hubs'}</span>
+            ) : null}
+            <Icon name="chevronDown" size={14} strokeWidth={2.2} className="notch__fold-chev" />
+          </button>
+          {!folded &&
+            hubs.map((hub) => (
+              <NavLink key={hub.id} to={`/h/${hub.id}`} className="notch__hub" aria-label={hub.name} title={hub.name}>
+                <HubIcon hub={hub} size={32} />
+              </NavLink>
+            ))}
+          {!folded && (
+            <Link to="/hubs/new" className="notch__add" aria-label="Start a Hub" title="Start a Hub">
+              <Icon name="plus" size={14} strokeWidth={2.2} />
+            </Link>
+          )}
         </div>
 
         <span className="notch__spacer" />

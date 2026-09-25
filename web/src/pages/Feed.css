@@ -48,3 +48,15 @@
 .feed__links a {
   color: var(--text-3);
 }
+
+.feed__around {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.person__status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
