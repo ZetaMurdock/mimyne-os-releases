@@ -22,6 +22,12 @@
   right: 0;
 }
 
+.menu__panel--up {
+  top: auto;
+  bottom: calc(100% + 10px);
+  transform-origin: bottom right;
+}
+
 .menu__panel--start {
   left: 0;
   transform-origin: top left;

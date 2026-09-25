@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLoaderData } from 'react-router-dom';
+import { useLoaderData, useSearchParams } from 'react-router-dom';
 import { HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
 import Composer from '../components/Composer.jsx';
@@ -8,6 +8,8 @@ import PledgeButton from '../components/PledgeButton.jsx';
 import PostCard from '../components/PostCard.jsx';
 import RoleChip from '../components/RoleChip.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import HubFiles from '../components/hub/HubFiles.jsx';
+import HubRooms from '../components/hub/HubRooms.jsx';
 import { Avatar } from '../components/Avatar.jsx';
 import { createPost, getHub } from '../data/api.js';
 import { usePerson } from '../data/people.js';
@@ -18,8 +20,16 @@ export function hubLoader({ params }) {
   return getHub(params.slug);
 }
 
+// Switching tabs or Rooms changes the address (?tab=, ?room=) without
+// loading the Hub again.
+export function shouldRevalidate({ currentParams, nextParams, defaultShouldRevalidate, formMethod }) {
+  return formMethod ? defaultShouldRevalidate : currentParams.slug !== nextParams.slug;
+}
+
 const TABS = [
+  { id: 'rooms', label: 'Rooms', icon: 'hash' },
   { id: 'board', label: 'Board' },
+  { id: 'files', label: 'Files', icon: 'folder' },
   { id: 'pledged', label: 'Pledged' },
   { id: 'rules', label: 'Rules' },
 ];
@@ -37,7 +47,10 @@ export default function Hub() {
     if (inIt) remember?.(hub.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inIt, hub.id]);
-  const [tab, setTab] = useState('board');
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'rooms';
+  const setTab = (id, extra = {}) =>
+    setParams(Object.fromEntries(Object.entries({ tab: id === 'rooms' ? null : id, ...extra }).filter(([, v]) => v)), { replace: true, preventScrollReset: true });
   const [sharing, setSharing] = useState(false);
   const [posts, setPosts] = useState(loadedPosts);
 
@@ -80,7 +93,7 @@ export default function Hub() {
         </div>
       )}
 
-      <div className="hub__content">
+      <div className={`hub__content ${tab === 'rooms' || tab === 'files' ? 'hub__content--wide' : ''}`}>
         <div className="hub__main">
           <div className="tabs" role="tablist" aria-label={`${hub.name} sections`}>
             {TABS.map((t) => (
@@ -94,12 +107,29 @@ export default function Hub() {
                 className="tabs__tab"
                 onClick={() => setTab(t.id)}
               >
+                {t.icon && <Icon name={t.icon} size={15} />}
                 {t.label}
               </button>
             ))}
           </div>
 
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="hub__panel">
+            {tab === 'rooms' && (
+              <HubRooms
+                hub={hub}
+                members={members}
+                roles={roles}
+                roleOf={roleOf}
+                user={user}
+                access={access}
+                roomId={params.get('room')}
+                onRoom={(room) => setTab('rooms', { room })}
+                onSignIn={signIn}
+              />
+            )}
+
+            {tab === 'files' && <HubFiles hub={hub} user={user} access={access} onSignIn={signIn} />}
+
             {tab === 'board' && (
               <div className="hub__board">
                 {!user ? (
@@ -128,6 +158,7 @@ export default function Hub() {
           </div>
         </div>
 
+        {tab !== 'rooms' && tab !== 'files' && (
         <aside className="hub__side">
           <section className="card side-card">
             <h2 className="side-card__title">House rules</h2>
@@ -144,6 +175,7 @@ export default function Hub() {
             <p className="hub__role-note">Names and colours are this Hub's own.</p>
           </section>
         </aside>
+        )}
       </div>
       {sharing && (
         <ShareDialog
