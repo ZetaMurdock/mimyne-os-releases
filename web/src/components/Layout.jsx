@@ -1,8 +1,11 @@
+import { lazy, Suspense } from 'react';
 import { Outlet, ScrollRestoration, useLocation, useNavigation } from 'react-router-dom';
-import NotchDock from './Notch.jsx';
 import SiteHeader from './SiteHeader.jsx';
 import { useSession } from '../data/session.jsx';
 import './Layout.css';
+
+// Only signed-in people get the notch, so it loads when someone signs in.
+const NotchDock = lazy(() => import('./Notch.jsx'));
 
 export default function Layout() {
   const { user } = useSession();
@@ -11,7 +14,13 @@ export default function Layout() {
 
   return (
     <div className={`app ${user ? 'app--notch' : ''}`}>
-      {user ? <NotchDock /> : <SiteHeader home={pathname === '/'} />}
+      {user ? (
+        <Suspense fallback={null}>
+          <NotchDock />
+        </Suspense>
+      ) : (
+        <SiteHeader home={pathname === '/'} />
+      )}
       <main className={`app__page ${leaving ? 'is-leaving' : ''}`}>
         <div key={pathname} className="app__enter">
           <Outlet />

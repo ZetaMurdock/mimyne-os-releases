@@ -1,13 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { users } from './mock.js';
+import { SOCIAL } from '../lib/features.js';
 
 // Who is signed in and which Hubs they pledged to. For now sign-in is a
 // stand-in that signs you in as the sample account; Firebase Auth replaces it.
 const SessionContext = createContext(null);
 const STORAGE_KEY = 'mimyne.session';
 const DEFAULT_PLEDGES = ['ashfall', 'pyre', 'wraithline', 'nightshift', 'lowpoly'];
+const SAMPLE_USER = { id: 'zeta', name: 'Zeta Murdock', username: 'zetamurdock', color: '#f4f4f5' };
 
 function load() {
+  if (!SOCIAL) return { userId: null, pledged: [] };
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved?.userId) return saved;
@@ -37,7 +39,7 @@ export function SessionProvider({ children }) {
   }, []);
 
   const value = useMemo(() => {
-    const user = state.userId ? users[state.userId] : null;
+    const user = state.userId ? SAMPLE_USER : null;
     const pledged = new Set(state.pledged);
     return {
       user,

@@ -1,9 +1,14 @@
 import Button from '../components/Button.jsx';
 import Collapsible from '../components/Collapsible.jsx';
 import { AvatarStack } from '../components/Avatar.jsx';
-import { users } from '../data/mock.js';
 import { useWindowsDownload } from '../lib/useWindowsDownload.js';
 import './Home.css';
+
+const PREVIEW_PEOPLE = [
+  { id: 'kai', name: 'Kai', color: '#f2b84b' },
+  { id: 'dex', name: 'Dex', color: '#5eead4' },
+  { id: 'rae', name: 'Rae', color: '#f9a8d4' },
+];
 
 export default function Home() {
   const download = useWindowsDownload();
@@ -28,7 +33,7 @@ export default function Home() {
           <div className="home__window-bar">
             <span className="home__window-name">Level 3 blockout</span>
             <span className="home__spacer" />
-            <AvatarStack users={[users.kai, users.dex, users.rae]} size={26} />
+            <AvatarStack users={PREVIEW_PEOPLE} size={26} />
             <span className="muted home__here">3 here now</span>
           </div>
           <div className="home__canvas">

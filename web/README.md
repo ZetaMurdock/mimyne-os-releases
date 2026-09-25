@@ -23,8 +23,17 @@ npm run build    # writes dist/, ready for GitHub Pages
 - `src/data/session.jsx`: who is signed in and which Hubs they pledged to.
   "Sign in" signs you in as the sample account until Firebase Auth is wired.
 
-## Not live yet
+## Publishing
 
-mimyne.com is still served from `/docs`. `public/` links the legal pages and
-the `/u/` profile page from there, so the built site keeps every URL the
-Discord app and the Terms point at.
+Every push to `main` that touches `web/` or `docs/` runs
+`.github/workflows/pages.yml`, which builds this folder and publishes it to
+mimyne.com. GitHub Pages must be set to deploy from GitHub Actions
+(Settings → Pages → Source).
+
+The published site has the home page and the legal pages. Hubs, the feed,
+posts and messages still run on sample data, so the build leaves them out
+until they're connected to Firebase; `npm run dev` always has them, and
+`VITE_SOCIAL=true npm run build` builds them in.
+
+The Privacy Policy, Terms, Guidelines and the `/u/` profile page still live
+in `/docs`; `public/` links to them so they keep their URLs.
