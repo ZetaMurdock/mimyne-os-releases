@@ -1,6 +1,6 @@
 import { expect, makeHub, tag, test } from './fixtures.js';
 
-test('approvals and views still show when Firestore says "too many requests"', async ({ person }) => {
+test('approvals and views still show when Firestore refuses count queries', async ({ person }) => {
   const a = await person('poster');
   const slug = `votes${tag()}`;
   await makeHub(a.page, 'Votes Hub', slug);
@@ -15,20 +15,16 @@ test('approvals and views still show when Firestore says "too many requests"', a
   await post.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(post.locator('.approve__count')).toHaveText('1');
 
-  // Now the counts are refused the way the live site saw it (429,
-  // resource-exhausted) the first few times each is asked.
-  const refused = new Map();
-  await b.page.context().route('**/*:runAggregationQuery*', async (route) => {
-    const key = route.request().postData();
-    const n = refused.get(key) ?? 0;
-    if (n < 2) {
-      refused.set(key, n + 1);
-      return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded.', status: 'RESOURCE_EXHAUSTED' } }) });
-    }
-    return route.continue();
+  // Now every count query is refused the way the live site saw it (429,
+  // resource-exhausted), every time: the counts come from the votes and
+  // views themselves instead.
+  let refused = 0;
+  await b.page.context().route('**/*:runAggregationQuery*', (route) => {
+    refused += 1;
+    return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded.', status: 'RESOURCE_EXHAUSTED' } }) });
   });
   await b.page.reload();
   await expect(post.locator('.approve__count')).toHaveText('1', { timeout: 20_000 });
   await expect(post.locator('.post__views')).toBeVisible();
-  expect(refused.size).toBeGreaterThan(0);
+  expect(refused).toBeGreaterThan(0);
 });
