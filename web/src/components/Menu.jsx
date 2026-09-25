@@ -5,6 +5,7 @@ import './Menu.css';
 // and when an item inside is chosen.
 export default function Menu({ trigger, label, align = 'end', children }) {
   const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
   const root = useRef(null);
   const id = useId();
 
@@ -22,9 +23,14 @@ export default function Menu({ trigger, label, align = 'end', children }) {
 
   return (
     <div className="menu" ref={root}>
-      {trigger({ open, toggle: () => setOpen((o) => !o), 'aria-expanded': open, 'aria-controls': id, 'aria-label': label })}
+      {trigger({ open, toggle: () => {
+        // Opens upward when there's more room above than below.
+        const box = root.current?.getBoundingClientRect();
+        setUp(!!box && innerHeight - box.bottom < 340 && box.top > innerHeight - box.bottom);
+        setOpen((o) => !o);
+      }, 'aria-expanded': open, 'aria-controls': id, 'aria-label': label })}
       {open && (
-        <div id={id} className={`menu__panel menu__panel--${align}`} onClick={(e) => e.target.closest('a,button') && setOpen(false)}>
+        <div id={id} className={`menu__panel menu__panel--${align} ${up ? 'menu__panel--up' : ''}`} onClick={(e) => e.target.closest('a,button') && setOpen(false)}>
           {children}
         </div>
       )}

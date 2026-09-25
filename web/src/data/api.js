@@ -31,7 +31,7 @@ function cleanHub(id, data) {
   };
 }
 
-function cleanFiles(files) {
+export function cleanFiles(files) {
   return (Array.isArray(files) ? files : [])
     .filter((f) => f && typeof f.path === 'string' && typeof f.name === 'string')
     .map((f) => ({ name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path, display: f.display !== false }));
@@ -141,6 +141,10 @@ export async function discoverHubs(count = 12) {
  * A new Hub, in the one batch the rules ask for: the Hub, its first roles,
  * and its owner's own pledge.
  */
+const FIRST_ROOM = (uid) => ({
+  name: 'general', topic: 'Say hi.', kind: 'chat', order: 0, createdBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+});
+
 export async function createHub({ id, name, tagline, tag, color, visibility, postingPolicy, rules }, me) {
   const problem = hubAddressProblem(id);
   if (problem) throw new Error(problem);
@@ -153,6 +157,8 @@ export async function createHub({ id, name, tagline, tag, color, visibility, pos
   batch.set(doc(db, 'hubs', id, 'roles', 'mod'), { name: 'Mod', color: '#C4B5FD', level: 'mod', order: 1 });
   batch.set(doc(db, 'hubs', id, 'roles', 'member'), { name: 'Member', color: '#F4F4F5', level: 'member', order: 2 });
   batch.set(doc(db, 'hubs', id, 'members', me.uid), { role: 'owner', level: 'owner', uid: me.uid, name: me.username, joinedAt: serverTimestamp() });
+  // Its first Room, for the chat.
+  batch.set(doc(db, 'hubs', id, 'rooms', 'general'), FIRST_ROOM(me.uid));
   try {
     await batch.commit();
     noteHub(me.uid, id, true);
@@ -516,27 +522,29 @@ export function watchConversations(uid, onChange, onError) {
   );
 }
 
+/** A chat message as it's shown, from a conversation or a Hub's Room. */
+export function cleanMessage(id, m) {
+  return {
+    id,
+    from: text(m.from, 128),
+    text: text(m.text, 4000),
+    files: cleanFiles(m.files),
+    post: m.post && typeof m.post.postId === 'string'
+      ? { postId: text(m.post.postId, 128), hubId: text(m.post.hubId, 32) || null, profileUid: text(m.post.profileUid, 128) || null }
+      : null,
+    profileUid: text(m.profileUid, 128) || null,
+    replyTo: m.replyTo && typeof m.replyTo.id === 'string'
+      ? { id: text(m.replyTo.id, 128), from: text(m.replyTo.from, 128), text: text(m.replyTo.text, 200) }
+      : null,
+    edited: !!m.editedAt,
+    at: millis(m.createdAt),
+  };
+}
+
 export function watchMessages(convoId, onChange, onError) {
   return onSnapshot(
     query(collection(db, 'conversations', convoId, 'messages'), orderBy('createdAt', 'asc'), limitToLast(300)),
-    (snap) => onChange(snap.docs.map((d) => {
-      const m = d.data();
-      return {
-        id: d.id,
-        from: text(m.from, 128),
-        text: text(m.text, 4000),
-        files: cleanFiles(m.files),
-        post: m.post && typeof m.post.postId === 'string'
-          ? { postId: text(m.post.postId, 128), hubId: text(m.post.hubId, 32) || null, profileUid: text(m.post.profileUid, 128) || null }
-          : null,
-        profileUid: text(m.profileUid, 128) || null,
-        replyTo: m.replyTo && typeof m.replyTo.id === 'string'
-          ? { id: text(m.replyTo.id, 128), from: text(m.replyTo.from, 128), text: text(m.replyTo.text, 200) }
-          : null,
-        edited: !!m.editedAt,
-        at: millis(m.createdAt),
-      };
-    })),
+    (snap) => onChange(snap.docs.map((d) => cleanMessage(d.id, d.data()))),
     onError,
   );
 }

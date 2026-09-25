@@ -12,7 +12,11 @@ import './styles/base.css';
 // SOCIAL is off, so the published site doesn't carry Firebase until it's on.
 const page = (load, loaderName) => async () => {
   const mod = await load();
-  return loaderName ? { Component: mod.default, loader: mod[loaderName] } : { Component: mod.default };
+  return {
+    Component: mod.default,
+    ...(loaderName ? { loader: mod[loaderName] } : {}),
+    ...(mod.shouldRevalidate ? { shouldRevalidate: mod.shouldRevalidate } : {}),
+  };
 };
 
 const router = createBrowserRouter([
