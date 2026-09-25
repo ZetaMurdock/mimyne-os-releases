@@ -8,6 +8,7 @@ import RoleChip from './RoleChip.jsx';
 import { FileCard } from './FileCard.jsx';
 import { useVotes } from './useVotes.js';
 import ShareDialog from './ShareDialog.jsx';
+import { LinkedText } from './LinkPreview.jsx';
 import { deletePost, postRef, postUrl } from '../data/api.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
@@ -70,7 +71,7 @@ export default function PostCard({ post, hub, roleOf, full = false, showHub = tr
             <TitleTag className="post__title">{post.title}</TitleTag>
           </Link>
         ))}
-      {post.body && <p className={post.title ? 'post__body' : 'post__body post__body--lead'}>{post.body}</p>}
+      {post.body && <LinkedText text={post.body} className={post.title ? 'post__body' : 'post__body post__body--lead'} />}
 
       {post.files.map((file) => (
         <FileCard key={file.path} file={file} locked={!user} onNeedAccount={signIn} />

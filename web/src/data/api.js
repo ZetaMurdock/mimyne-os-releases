@@ -34,7 +34,7 @@ function cleanHub(id, data) {
 function cleanFiles(files) {
   return (Array.isArray(files) ? files : [])
     .filter((f) => f && typeof f.path === 'string' && typeof f.name === 'string')
-    .map((f) => ({ name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path }));
+    .map((f) => ({ name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path, display: f.display !== false }));
 }
 
 export function cleanPost(scope, id, data) {

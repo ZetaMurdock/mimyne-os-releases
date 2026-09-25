@@ -75,6 +75,12 @@ export async function uploadFile(file, onProgress = () => {}) {
   return { name: file.name, size: file.size, type, path: start.path };
 }
 
+/** A picked file's label, saying so when a picture, video or song goes as a plain file. */
+export async function uploadPicked({ file, display = true }, onProgress) {
+  const label = await uploadFile(file, onProgress);
+  return display === false && showable(file) ? { ...label, display: false } : label;
+}
+
 /** Starts downloading a file through a link that works for ten minutes. */
 export async function downloadFile(path) {
   window.location.assign(await fileLink(path));
@@ -91,3 +97,6 @@ export function fileLink(path) {
   url.catch(() => links.delete(path));
   return url;
 }
+
+/** Pictures, videos and songs can be shown in place, or sent as plain files. */
+export const showable = (file) => /^(image|video|audio)\//.test(file?.type ?? '');

@@ -9,14 +9,6 @@ export const SHARE_BASE = import.meta.env.VITE_SHARE_URL ?? `${FILES_URL}/s`;
 /** The link to hand out for a page on mimyne.com, given its path (/h/<hub>…). */
 export const shareUrl = (path) => `${SHARE_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 
-const shareBase = SHARE_BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const LINK = new RegExp(`(?:https://(?:www\\.)?mimyne\\.com|${shareBase})(/(?:h|u|people)/[^\\s<>"']+)`, 'g');
-
-/** The mimyne.com pages a message's text links to, as paths. */
-export function mimyneLinks(text) {
-  return [...String(text || '').matchAll(LINK)].map((m) => m[1].replace(/[).,!?]+$/, '')).slice(0, 3);
-}
-
 /** What a path points at: a Hub, a post, or a profile. */
 export function linkTarget(path) {
   let m = path.match(/^\/h\/([a-z0-9-]{3,32})\/p\/([A-Za-z0-9_-]{1,128})$/);
