@@ -5,15 +5,16 @@ import Button from '../components/Button.jsx';
 import Dialog from '../components/Dialog.jsx';
 import Icon from '../components/Icon.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import { SharedPost, SharedProfile } from '../components/ShareCards.jsx';
+import { LinkedText } from '../components/LinkPreview.jsx';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
-  deleteMessage, editMessage, getHubCard, getPostCard, openDirect, postUrl, sendMessage, watchConversations, watchMessages,
+  deleteMessage, editMessage, getHubCard, openDirect, sendMessage, watchConversations, watchMessages,
 } from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
-import { uploadFile } from '../lib/files.js';
-import { linkTarget, mimyneLinks } from '../lib/share.js';
+import { uploadPicked } from '../lib/files.js';
 import { formatBytes, timeAgo } from '../lib/format.js';
 import NeedsAccount from './NeedsAccount.jsx';
 import './Messages.css';
@@ -155,7 +156,7 @@ function Conversation({ convo, me }) {
     setError(null);
     try {
       const labels = [];
-      for (const { id, file } of files) labels.push(await uploadFile(file, (p) => setProgress((prev) => ({ ...prev, [id]: p }))));
+      for (const picked of files) labels.push(await uploadPicked(picked, (p) => setProgress((prev) => ({ ...prev, [picked.id]: p }))));
       await sendMessage(convo.id, me.uid, {
         text,
         files: labels,
@@ -234,8 +235,15 @@ function Conversation({ convo, me }) {
           {replyTo && <ReplyBar message={replyTo} mine={replyTo.from === me.uid} onCancel={() => setReplyTo(null)} />}
           {files.length > 0 && (
             <div className="inbox__pending">
-              {files.map(({ id, file }) => (
-                <PendingFile key={id} file={file} progress={progress[id]} onRemove={() => setFiles((list) => list.filter((f) => f.id !== id))} />
+              {files.map(({ id, file, display = true }) => (
+                <PendingFile
+                key={id}
+                file={file}
+                progress={progress[id]}
+                display={display}
+                onDisplay={(show) => setFiles((list) => list.map((f) => (f.id === id ? { ...f, display: show } : f)))}
+                onRemove={() => setFiles((list) => list.filter((f) => f.id !== id))}
+              />
               ))}
             </div>
           )}
@@ -374,19 +382,17 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
         </form>
       ) : (
         message.text && (
-          <p className="msg__bubble">
-            {message.text}
-            {message.edited && <span className="msg__edited"> (edited)</span>}
-          </p>
+          <LinkedText
+            text={message.text}
+            className="msg__bubble"
+            after={message.edited && <span className="msg__edited"> (edited)</span>}
+          />
         )
       )}
       {message.files.map((f) => (
         <div key={f.path} className="msg__file">
           <FileCard file={f} compact />
         </div>
-      ))}
-      {mimyneLinks(message.text).map((path) => (
-        <LinkBubble key={path} path={path} />
       ))}
       {message.post && <SharedPost post={message.post} />}
       {message.profileUid && <SharedProfile uid={message.profileUid} />}
@@ -416,86 +422,6 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
         </div>
       )}
     </div>
-  );
-}
-
-// A post someone passed on: a small card that opens it.
-function SharedPost({ post }) {
-  const [card, setCard] = useState(undefined);
-  useEffect(() => {
-    let live = true;
-    getPostCard(post).then((c) => live && setCard(c)).catch(() => live && setCard(null));
-    return () => {
-      live = false;
-    };
-  }, [post.postId, post.hubId, post.profileUid]);
-  const author = usePerson(card?.authorUid, card?.authorName);
-  if (card === undefined) return <div className="msg--card msg__shared muted">Loading post…</div>;
-  if (!card) return <div className="msg--card msg__shared muted">This post isn't there any more.</div>;
-  return (
-    <Link to={postUrl(card)} className="msg--card msg__shared">
-      <span className="msg__shared-kind">
-        <Mark /> Post by {author.name}
-      </span>
-      {card.title && <strong>{card.title}</strong>}
-      {card.body && <span className="msg__shared-body">{card.body}</span>}
-      {card.files.length > 0 && <span className="muted">📎 {card.files.length === 1 ? card.files[0].name : `${card.files.length} files`}</span>}
-    </Link>
-  );
-}
-
-// Mimyne's mark on anything passed on in a message.
-const Mark = () => <img src="/logo.png" alt="" className="msg__mark" aria-hidden="true" />;
-
-/** A link to a Hub, post or profile on mimyne.com, as a small card of what it is. */
-function LinkBubble({ path }) {
-  const target = linkTarget(path);
-  if (!target) return null;
-  if (target.kind === 'post') return <SharedPost post={target} />;
-  if (target.kind === 'profile') return target.uid ? <SharedProfile uid={target.uid} /> : <NamedProfile name={target.name} />;
-  return <SharedHub hubId={target.hubId} />;
-}
-
-function NamedProfile({ name }) {
-  const [uid, setUid] = useState(undefined);
-  useEffect(() => {
-    lookupUsername(name).then(setUid).catch(() => setUid(null));
-  }, [name]);
-  if (uid === undefined) return null;
-  if (!uid) return null;
-  return <SharedProfile uid={uid} />;
-}
-
-function SharedHub({ hubId }) {
-  const [hub, setHub] = useState(undefined);
-  useEffect(() => {
-    getHubCard(hubId).then(setHub).catch(() => setHub(null));
-  }, [hubId]);
-  if (!hub) return null;
-  return (
-    <Link to={`/h/${hub.id}`} className="msg--card msg__profile">
-      <HubIcon hub={hub} size={40} />
-      <span className="msg__shared-text">
-        <strong>{hub.name}</strong>
-        <span className="muted">{hub.tagline || 'A Hub on Mimyne'}</span>
-      </span>
-      <Mark />
-    </Link>
-  );
-}
-
-// A profile someone passed on.
-function SharedProfile({ uid }) {
-  const person = usePerson(uid);
-  return (
-    <Link to={`/people/${uid}`} className="msg--card msg__profile">
-      <Avatar person={person} size={40} />
-      <span className="msg__shared-text">
-        <strong>{person.name}</strong>
-        <span className="muted">@{person.username} · Profile on Mimyne</span>
-      </span>
-      <Mark />
-    </Link>
   );
 }
 

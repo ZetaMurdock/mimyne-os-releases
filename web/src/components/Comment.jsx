@@ -8,6 +8,7 @@ import Composer from './Composer.jsx';
 import RoleChip from './RoleChip.jsx';
 import { FileCard } from './FileCard.jsx';
 import { useVotes } from './useVotes.js';
+import { LinkedText } from './LinkPreview.jsx';
 import { postRef } from '../data/api.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
@@ -50,7 +51,7 @@ export default function Comment({ comment, post, roleOf, canModerate, depth = 0,
         </div>
         {!collapsed && (
           <>
-            {comment.text && <p className="comment__text">{comment.text}</p>}
+            {comment.text && <LinkedText text={comment.text} className="comment__text" />}
             {comment.files.map((f) => (
               <FileCard key={f.path} file={f} compact locked={!user} onNeedAccount={signIn} />
             ))}

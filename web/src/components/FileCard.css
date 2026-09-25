@@ -122,3 +122,32 @@ button.file-card__locked:hover {
   aspect-ratio: 16 / 9;
   max-height: 240px;
 }
+
+.file-audio {
+  width: 100%;
+  height: 40px;
+}
+
+.file-card__show {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+}
+
+.file-card__show button {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.file-card__show button[aria-pressed='true'] {
+  background: var(--surface-1, #1a1a1c);
+  color: var(--text);
+}

@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { Avatar } from './Avatar.jsx';
 import Button from './Button.jsx';
 import { PendingFile } from './FileCard.jsx';
-import { uploadFile } from '../lib/files.js';
+import { uploadPicked } from '../lib/files.js';
 import { useSession } from '../data/session.jsx';
 import './Composer.css';
 
@@ -44,8 +44,8 @@ export default function Composer({
     setError(null);
     try {
       const labels = [];
-      for (const { id, file } of files) {
-        labels.push(await uploadFile(file, (p) => setProgress((prev) => ({ ...prev, [id]: p }))));
+      for (const picked of files) {
+        labels.push(await uploadPicked(picked, (p) => setProgress((prev) => ({ ...prev, [picked.id]: p }))));
       }
       await onSubmit({ text: text.trim(), files: labels, destination });
       setText('');
@@ -93,8 +93,15 @@ export default function Composer({
 
       {files.length > 0 && (
         <div className="composer__files">
-          {files.map(({ id, file }) => (
-            <PendingFile key={id} file={file} progress={progress[id]} onRemove={() => setFiles((prev) => prev.filter((p) => p.id !== id))} />
+          {files.map(({ id, file, display = true }) => (
+            <PendingFile
+                key={id}
+                file={file}
+                progress={progress[id]}
+                display={display}
+                onDisplay={(show) => setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, display: show } : f)))}
+                onRemove={() => setFiles((prev) => prev.filter((f) => f.id !== id))}
+              />
           ))}
         </div>
       )}
