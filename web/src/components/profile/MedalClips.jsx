@@ -3,6 +3,7 @@ import { doc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import ApproveBar from '../ApproveBar.jsx';
 import Icon from '../Icon.jsx';
+import MediaPicker from '../MediaPicker.jsx';
 import { useVotes } from '../useVotes.js';
 import { db } from '../../lib/firebase.js';
 import { clipsPage, frontClips } from '../../lib/medal.js';
@@ -246,6 +247,7 @@ function ClipComments({ uid, clipId }) {
       ))}
       {remarks.length === 0 && <span className="muted">Nothing said yet.</span>}
       <form className="clip__say" onSubmit={send}>
+        <MediaPicker emojiOnly placement="up" onEmoji={(char) => setDraft((d) => (d + char).slice(0, MAX_CLIP_COMMENT_CHARS))} />
         <input className="field__input" value={draft} maxLength={MAX_CLIP_COMMENT_CHARS} placeholder="Say something…" onChange={(e) => setDraft(e.target.value)} aria-label="Comment on this clip" />
         <button type="submit" className="songs__btn" disabled={busy || !draft.trim()}>
           Send

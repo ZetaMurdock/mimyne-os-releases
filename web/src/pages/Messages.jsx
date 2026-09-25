@@ -5,6 +5,8 @@ import Button from '../components/Button.jsx';
 import Dialog from '../components/Dialog.jsx';
 import Icon from '../components/Icon.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import MediaPicker from '../components/MediaPicker.jsx';
+import { insertAt, placeCaret } from '../lib/insert.js';
 import { SharedPost, SharedProfile } from '../components/ShareCards.jsx';
 import { LinkedText } from '../components/LinkPreview.jsx';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
@@ -173,6 +175,30 @@ function Conversation({ convo, me }) {
     }
   }
 
+  function addEmoji(char) {
+    const next = insertAt(input.current, text, char);
+    setText(next.value);
+    placeCaret(input.current, next.caret);
+  }
+
+  // A GIF, sticker or something from your library goes at once, as its own
+  // message, the way chat apps do it.
+  async function sendMedia(media) {
+    setError(null);
+    const reply = replyTo ? { id: replyTo.id, from: replyTo.from, text: replyTo.text || describeAttachment(replyTo) } : null;
+    const item = media.kind === 'library' ? media.item : null;
+    try {
+      if (item?.kind === 'file') {
+        await sendMessage(convo.id, me.uid, { files: [{ name: item.name, size: item.size, type: item.type, path: item.path }], replyTo: reply });
+      } else {
+        await sendMessage(convo.id, me.uid, { text: media.kind === 'gif' ? media.url : item.url, replyTo: reply });
+      }
+      setReplyTo(null);
+    } catch (err) {
+      setError(err.code === 'permission-denied' ? "That couldn't be sent." : err.message);
+    }
+  }
+
   async function saveEdit(message, words) {
     setEditing(null);
     if (!words.trim() || words.trim() === message.text) return;
@@ -260,6 +286,7 @@ function Conversation({ convo, me }) {
               }}
             />
             <Button variant="ghost" icon="paperclip" iconOnly aria-label="Attach a file" onClick={() => fileInput.current.click()} />
+            <MediaPicker onEmoji={addEmoji} onPick={sendMedia} placement="up" />
             <input
               ref={input}
               className="inbox__input"

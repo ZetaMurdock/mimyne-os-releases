@@ -417,7 +417,8 @@ export async function sendMessage(convoId, uid, { text: words, files, post, prof
     replyTo: replyTo ? withoutEmpty({ id: replyTo.id, from: replyTo.from, text: replyTo.text?.slice(0, 200) }) : undefined,
     createdAt: serverTimestamp(),
   }));
-  const preview = words?.trim()
+  const onlyGif = /^https:\/\/\S+\.(gif|webp)(\?\S*)?$/i.test(words?.trim() ?? '');
+  const preview = (onlyGif ? 'Sent a GIF' : words?.trim())
     || (files?.length ? `Sent ${files.length === 1 ? files[0].name : `${files.length} files`}` : '')
     || (post ? 'Shared a post' : profileUid ? 'Shared a profile' : '');
   await updateDoc(doc(db, 'conversations', convoId), { lastAt: serverTimestamp(), lastFrom: uid, lastText: preview.slice(0, 200) });
