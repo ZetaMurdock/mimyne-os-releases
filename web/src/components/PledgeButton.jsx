@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useRevalidator } from 'react-router-dom';
 import Button from './Button.jsx';
 import { useSession } from '../data/session.jsx';
 
 // Pledge → Pledging → Pledged. Signed out, it asks you to sign in first.
 export default function PledgeButton({ hub, size = 'md', quiet = false, owner = false }) {
   const { user, pledged, pledge, unpledge, signIn } = useSession();
+  const revalidator = useRevalidator();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const isPledged = pledged.has(hub.id);
@@ -25,6 +27,8 @@ export default function PledgeButton({ hub, size = 'md', quiet = false, owner = 
     setError(null);
     try {
       await action(hub.id);
+      // The page's pledged count and who may post come from its loader.
+      revalidator.revalidate();
     } catch (err) {
       setError(err.code === 'permission-denied' ? "You can't pledge to this Hub." : err.message);
     } finally {
