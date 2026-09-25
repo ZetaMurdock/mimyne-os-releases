@@ -761,3 +761,8 @@
   font-size: 13px;
   font-weight: 500;
 }
+
+.cv-tools__btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}

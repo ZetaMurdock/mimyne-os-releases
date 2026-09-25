@@ -2,7 +2,7 @@
 // who's in the Hub right now, and its Files shelf. The rules are in the
 // app's repo (firestore.rules, "hubs": rooms, here, files).
 import {
-  addDoc, collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc,
+  addDoc, collection, deleteDoc, deleteField, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { cleanFiles, cleanMessage } from './api.js';
@@ -47,6 +47,7 @@ export function watchRooms(hubId, onChange, onError) {
         order: r.order ?? 0,
         access: cleanAccess(r.access),
         editedAt: r.editedAt ? millis(r.editedAt) : null,
+        workspace: text(r.workspace, 128) || null,
         pending: d.metadata.hasPendingWrites && !r.createdAt?.toMillis,
         raw: r,
       };
@@ -55,7 +56,7 @@ export function watchRooms(hubId, onChange, onError) {
   );
 }
 
-function roomFields({ name, tag, topic, kind, order, access }) {
+function roomFields({ name, tag, topic, kind, order, access, workspace }) {
   const cleanName = name.trim().slice(0, 60);
   if (!cleanName) throw new Error('Give the Room a name.');
   const acc = cleanAccess(access);
@@ -65,15 +66,21 @@ function roomFields({ name, tag, topic, kind, order, access }) {
     topic: topic?.trim().slice(0, 200),
     kind,
     order,
+    workspace: workspace || undefined,
     // Left out when it's all the usual, so older Rooms and new ones read alike.
     access: acc.view === 'everyone' && acc.add === 'everyone' && acc.edit === 'pledged' ? undefined : acc,
   });
 }
 
-export async function createRoom(hubId, { name, tag, topic, kind = 'chat', order = 0, access }, uid) {
-  const fields = roomFields({ name, tag, topic, kind, order, access });
-  const slug = fields.tag ?? 'room';
-  const id = slug === 'general' ? 'general' : `${slug.slice(0, 34)}-${Math.random().toString(36).slice(2, 6)}`;
+/** A new Room's id, from its tag. */
+export function roomIdFor(tag) {
+  const slug = roomName(tag || '') || 'room';
+  return slug === 'general' ? 'general' : `${slug.slice(0, 34)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export async function createRoom(hubId, { name, tag, topic, kind = 'chat', order = 0, access, workspace, id: givenId }, uid) {
+  const fields = roomFields({ name, tag, topic, kind, order, access, workspace });
+  const id = givenId ?? roomIdFor(fields.tag);
   await setDoc(doc(db, 'hubs', hubId, 'rooms', id), { ...fields, createdBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   return id;
 }
@@ -86,10 +93,16 @@ export function updateRoom(hubId, room, changes) {
     kind: changes.kind ?? room.kind,
     order: changes.order ?? room.order,
     access: changes.access ?? room.access,
+    workspace: 'workspace' in changes ? changes.workspace : room.workspace,
   });
   // What only the rules' own stamps may say stays exactly as it was.
   const keep = Object.fromEntries(['createdBy', 'createdAt', 'editedAt'].filter((k) => room.raw?.[k] !== undefined).map((k) => [k, room.raw[k]]));
   return setDoc(doc(db, 'hubs', hubId, 'rooms', room.id), { ...fields, ...keep, updatedAt: serverTimestamp() });
+}
+
+/** A Room lets go of the app workspace it showed (its owner moved it elsewhere). */
+export function clearRoomWorkspace(hubId, roomId) {
+  return updateDoc(doc(db, 'hubs', hubId, 'rooms', roomId), { workspace: deleteField(), updatedAt: serverTimestamp() });
 }
 
 export function deleteRoom(hubId, roomId) {

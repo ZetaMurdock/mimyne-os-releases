@@ -663,3 +663,39 @@
     width: auto;
   }
 }
+
+.room-tile__app {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  background: rgb(13 13 16 / 0.85);
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.room-form__warn {
+  color: #fcd34d;
+}
+
+.room-view__app-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.room-view__app-empty strong {
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.room-view__app-empty span {
+  max-width: 420px;
+}

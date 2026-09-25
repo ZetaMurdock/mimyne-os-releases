@@ -34,6 +34,32 @@ const DROPPABLE = new Set(['normal', 'file', 'text']);
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+// Positions are saved as whole numbers; what's held on screen matches.
+function rounded(changes) {
+  const out = { ...changes };
+  if (typeof out.x === 'number') out.x = Math.round(out.x);
+  if (typeof out.y === 'number') out.y = Math.round(out.y);
+  if (out.style) {
+    out.style = { ...out.style };
+    for (const k of ['width', 'height']) if (typeof out.style[k] === 'number') out.style[k] = Math.round(out.style[k]);
+  }
+  return out;
+}
+
+/** Whether the saved note has caught up with what's held for it. */
+function settled(n, changes) {
+  return Object.entries(changes).every(([k, v]) => {
+    if (k === 'style') {
+      return Object.entries(v).every(([sk, sv]) => (sv === undefined ? n.style[sk] === undefined
+        : typeof sv === 'number' ? Math.abs((n.style[sk] ?? NaN) - sv) < 1 : n.style[sk] === sv));
+    }
+    if (k === 'x' || k === 'y') return Math.abs(n[k] - v) < 1;
+    if (k === 'parentId') return (n.parentId ?? null) === (v ?? null);
+    if (k === 'order') return n.parentId ? n.order === v : true;
+    return n[k] === v;
+  });
+}
+
 /** Where a line from a box's centre toward (tx, ty) leaves the box. */
 function edgePoint(r, tx, ty, gap) {
   const cx = r.x + r.w / 2;
@@ -45,7 +71,7 @@ function edgePoint(r, tx, ty, gap) {
   return { x: cx + dx * t, y: cy + dy * t };
 }
 
-export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNote, hubId, roomId }) {
+export default function Canvas({ nodes: liveNodes, edges, rights, uid, onWriting, hubId, roomId }) {
   const stage = useRef(null);
   const world = useRef(null);
   const fileInput = useRef(null);
@@ -63,6 +89,100 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
   const [uploads, setUploads] = useState([]);
   const [error, setError] = useState(null);
   const [labeling, setLabeling] = useState(null);
+
+  // What was just moved, resized, restyled or rewritten is drawn with its new
+  // values until the saved copy comes back, so nothing flicks back to where it
+  // was on the way (the jump when letting go of a note).
+  const [pending, setPending] = useState({}); // id → { changes, at }
+  const nodes = useMemo(() => liveNodes.map((n) => {
+    const p = pending[n.id];
+    return p ? { ...n, ...p.changes, style: { ...n.style, ...(p.changes.style ?? {}) } } : n;
+  }), [liveNodes, pending]);
+  useEffect(() => {
+    const settle = () => setPending((prev) => {
+      const ids = Object.keys(prev);
+      if (!ids.length) return prev;
+      const next = {};
+      for (const id of ids) {
+        const n = liveNodes.find((x) => x.id === id);
+        if (n && !settled(n, prev[id].changes) && Date.now() - prev[id].at < 6000) next[id] = prev[id];
+      }
+      return Object.keys(next).length === ids.length ? prev : next;
+    });
+    settle();
+    const timer = setInterval(settle, 2000);
+    return () => clearInterval(timer);
+  }, [liveNodes]);
+  const hold = (byNode) => setPending((prev) => ({
+    ...prev,
+    ...Object.fromEntries(Object.entries(byNode).map(([id, changes]) => [id, { changes: rounded(changes), at: Date.now() }])),
+  }));
+  const unhold = (ids) => setPending((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !ids.includes(id))));
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+  const current = (id) => nodesRef.current.find((n) => n.id === id);
+
+  // Undo and redo: your own changes on this canvas, since you opened it.
+  const history = useRef({ undo: [], redo: [] });
+  const [, setHistoryTick] = useState(0);
+  const record = (entry) => {
+    history.current.undo.push(entry);
+    if (history.current.undo.length > 100) history.current.undo.shift();
+    history.current.redo = [];
+    setHistoryTick((n) => n + 1);
+  };
+  async function step(from, to, run) {
+    const entry = history.current[from].pop();
+    setHistoryTick((n) => n + 1);
+    if (!entry) return;
+    try {
+      await entry[run]();
+      history.current[to].push(entry);
+    } catch {
+      setError(run === 'undo' ? "That couldn't be undone. It may have been changed or removed since." : "That couldn't be redone.");
+    }
+    setHistoryTick((n) => n + 1);
+  }
+  const undo = () => step('undo', 'redo', 'undo');
+  const redo = () => step('redo', 'undo', 'redo');
+
+  async function applyMoves(moves) {
+    hold(Object.fromEntries(moves.map((m) => [m.id, m.changes])));
+    const list = moves.map((m) => ({ node: current(m.id), changes: m.changes })).filter((m) => m.node);
+    if (!list.length) return;
+    await moveNodes(hubId, roomId, uid, list).catch((err) => {
+      unhold(moves.map((m) => m.id));
+      throw err;
+    });
+  }
+
+  async function applyPatch(id, changes) {
+    const node = current(id);
+    if (!node) throw new Error('gone');
+    hold({ [id]: changes });
+    await patchNode(hubId, roomId, uid, node, changes).catch((err) => {
+      unhold([id]);
+      throw err;
+    });
+  }
+
+  // A note as it was, to bring back after a delete.
+  const revive = (n) => addNode(hubId, roomId, uid, {
+    id: n.id, type: n.type, x: n.x, y: n.y, content: n.content, style: n.style, parentId: n.parentId, order: n.order, file: n.file,
+  });
+  const reviveEdge = (e) => addEdge(hubId, roomId, uid, { from: e.from, to: e.to, label: e.label, head: e.head, dash: e.dash, color: e.color });
+
+  async function editEdge(edge, changes) {
+    const before = Object.fromEntries(Object.keys(changes).map((k) => [k, edge[k] ?? (k === 'label' ? '' : null)]));
+    try {
+      await patchEdge(hubId, roomId, edge, changes);
+      record({ undo: () => patchEdge(hubId, roomId, edge, before), redo: () => patchEdge(hubId, roomId, edge, changes) });
+    } catch {
+      setError("That arrow didn't save.");
+    }
+  }
   // Fit everything in once, for a Room that already has things in it; an
   // empty one stays put while the first notes go in.
   const fitted = useRef(nodes.length === 0);
@@ -182,6 +302,7 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
     };
     try {
       await addNode(hubId, roomId, uid, node);
+      record({ undo: () => removeNodes(hubId, roomId, [node.id], edgesRef.current), redo: () => addNode(hubId, roomId, uid, node) });
       setSelected(new Set([node.id]));
       if (type !== 'list' && type !== 'file') setEditing(node.id);
       return node.id;
@@ -208,10 +329,12 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
       try {
         const label = await uploadFile(file, (progress) => setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, progress } : u))));
         const cards = parentId ? cardsOf.get(parentId) ?? [] : [];
-        await addNode(hubId, roomId, uid, {
-          type: 'file', ...spot, content: file.name, file: label, style: DEFAULT_SIZE.file,
+        const made = {
+          id: newId(), type: 'file', ...spot, content: file.name, file: label, style: DEFAULT_SIZE.file,
           ...(parentId ? { parentId, order: (cards.at(-1)?.order ?? 0) + 1 } : {}),
-        });
+        };
+        await addNode(hubId, roomId, uid, made);
+        record({ undo: () => removeNodes(hubId, roomId, [made.id], edgesRef.current), redo: () => addNode(hubId, roomId, uid, made) });
       } catch (err) {
         setError(err.message || `${file.name} couldn't be added.`);
       } finally {
@@ -385,23 +508,41 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
         const prev = after.at(-1);
         const next = cards[after.length];
         const order = prev && next ? (prev.order + next.order) / 2 : prev ? prev.order + 1 : next ? next.order - 1 : 1;
-        moves.push({ node: single, changes: { parentId: list.id, order } });
+        moves.push({ id: single.id, changes: { parentId: list.id, order } });
       } else if (single?.parentId) {
         // Out of its list, onto the plane.
-        moves.push({ node: single, changes: { parentId: null, order: 0, x: at.x, y: at.y } });
+        moves.push({ id: single.id, changes: { parentId: null, order: 0, x: at.x, y: at.y } });
       } else {
         for (const id of g.ids) {
           const n = byId.get(id);
-          if (n && !n.parentId) moves.push({ node: n, changes: { x: n.x + dx, y: n.y + dy } });
+          if (n && !n.parentId) moves.push({ id, changes: { x: n.x + dx, y: n.y + dy } });
         }
       }
-      if (moves.length) await moveNodes(hubId, roomId, uid, moves).catch(() => setError("That move didn't save."));
+      if (!moves.length) return;
+      const back = moves.map((m) => {
+        const n = byId.get(m.id);
+        return { id: m.id, changes: { x: n.x, y: n.y, parentId: n.parentId, order: n.order } };
+      });
+      try {
+        await applyMoves(moves);
+        record({ undo: () => applyMoves(back), redo: () => applyMoves(moves) });
+      } catch {
+        setError("That move didn't save.");
+      }
     } else if (g.kind === 'link') {
       setLinking(null);
       const target = nodeAt(at, g.from);
       if (target && target.id !== g.from) {
         const exists = liveEdges.some((x) => (x.from === g.from && x.to === target.id) || (x.from === target.id && x.to === g.from));
-        if (!exists) await addEdge(hubId, roomId, uid, { from: g.from, to: target.id }).catch(() => setError("That arrow couldn't be drawn."));
+        if (!exists) {
+          const from = g.from;
+          try {
+            const id = await addEdge(hubId, roomId, uid, { from, to: target.id });
+            record({ undo: () => removeEdge(hubId, roomId, id), redo: () => addEdge(hubId, roomId, uid, { from, to: target.id }) });
+          } catch {
+            setError("That arrow couldn't be drawn.");
+          }
+        }
       }
       setTool('select');
     } else if (g.kind === 'resize') {
@@ -411,7 +552,13 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
         const node = g.node;
         const style = node.type === 'shape' || node.type === 'file' ? { width: Math.round(d.w), height: Math.round(d.h) } : { width: Math.round(d.w) };
         if (node.type === 'file' && !node.style.height) delete style.height;
-        await patchNode(hubId, roomId, uid, node, { style }).catch(() => setError("That didn't save."));
+        const before = Object.fromEntries(Object.keys(style).map((k) => [k, node.style[k]]));
+        try {
+          await applyPatch(node.id, { style });
+          record({ undo: () => applyPatch(node.id, { style: before }), redo: () => applyPatch(node.id, { style }) });
+        } catch {
+          setError("That didn't save.");
+        }
       }
     }
   }
@@ -424,7 +571,14 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
   async function removeSelected() {
     if (edgeSel) {
       const edge = liveEdges.find((x) => x.id === edgeSel);
-      if (edge && canModifyEdge(edge)) await removeEdge(hubId, roomId, edge.id).catch(() => setError("That arrow couldn't be removed."));
+      if (edge && canModifyEdge(edge)) {
+        try {
+          await removeEdge(hubId, roomId, edge.id);
+          record({ undo: () => reviveEdge(edge), redo: () => removeEdge(hubId, roomId, edge.id) });
+        } catch {
+          setError("That arrow couldn't be removed.");
+        }
+      }
       setEdgeSel(null);
       return;
     }
@@ -433,7 +587,24 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
     const all = ids.flatMap((id) => [id, ...(cardsOf.get(id) ?? []).filter(canModify).map((c) => c.id)]);
     if (!all.length) return;
     setSelected(new Set());
-    await removeNodes(hubId, roomId, [...new Set(all)], liveEdges).catch(() => setError('Some of that couldn’t be removed.'));
+    const gone = [...new Set(all)];
+    const kept = gone.map((id) => byId.get(id));
+    const touching = liveEdges.filter((x) => gone.includes(x.from) || gone.includes(x.to));
+    try {
+      await removeNodes(hubId, roomId, gone, liveEdges);
+      record({
+        undo: async () => {
+          // Lists first, so their cards have somewhere to go back to.
+          const back = await Promise.allSettled(kept.filter((n) => n.type === 'list').map(revive));
+          back.push(...(await Promise.allSettled(kept.filter((n) => n.type !== 'list').map(revive))));
+          await Promise.allSettled(touching.map(reviveEdge));
+          if (back.some((r) => r.status === 'rejected')) setError("Some of it couldn't come back (files other people added stay theirs).");
+        },
+        redo: () => removeNodes(hubId, roomId, gone, edgesRef.current),
+      });
+    } catch {
+      setError('Some of that couldn’t be removed.');
+    }
   }
 
   async function duplicate() {
@@ -444,13 +615,28 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
       made.push(id);
       await addNode(hubId, roomId, uid, { id, type: n.type, x: n.x + 30, y: n.y + 30, content: n.content, style: n.style }).catch(() => {});
     }
-    if (made.length) setSelected(new Set(made));
+    if (made.length) {
+      const copies = made.map((id) => current(id)).filter(Boolean);
+      setSelected(new Set(made));
+      record({ undo: () => removeNodes(hubId, roomId, made, edgesRef.current), redo: () => Promise.all(copies.map(revive)) });
+    }
   }
 
   function onKeyDown(e) {
     // Anything on the canvas but a text box being typed in.
     if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
     const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      redo();
+      return;
+    }
     if ((e.key === 'Delete' || e.key === 'Backspace') && (selected.size || edgeSel)) {
       e.preventDefault();
       removeSelected();
@@ -507,7 +693,13 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
     setEditing(null);
     refocus();
     if (content === node.content) return;
-    await patchNode(hubId, roomId, uid, node, { content }).catch(() => setError("That didn't save."));
+    const before = node.content;
+    try {
+      await applyPatch(node.id, { content });
+      record({ undo: () => applyPatch(node.id, { content: before }), redo: () => applyPatch(node.id, { content }) });
+    } catch {
+      setError("That didn't save.");
+    }
   }
 
   const single = selected.size === 1 ? byId.get([...selected][0]) : null;
@@ -516,7 +708,16 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
   const selEdge = edgeSel ? liveEdges.find((x) => x.id === edgeSel) : null;
 
   async function restyle(style) {
-    await Promise.all(styleable.map((n) => patchNode(hubId, roomId, uid, n, { style }))).catch(() => setError("That didn't save."));
+    const targets = styleable.map((n) => ({ id: n.id, before: Object.fromEntries(Object.keys(style).map((k) => [k, n.style[k]])) }));
+    try {
+      await Promise.all(targets.map((t) => applyPatch(t.id, { style })));
+      record({
+        undo: () => Promise.all(targets.map((t) => applyPatch(t.id, { style: t.before }))),
+        redo: () => Promise.all(targets.map((t) => applyPatch(t.id, { style }))),
+      });
+    } catch {
+      setError("That didn't save.");
+    }
   }
 
   // Drawing positions: what's being dragged follows the pointer.
@@ -552,7 +753,8 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
   });
 
   return (
-    <div className="cv">
+    // Keys work anywhere on the canvas, its bars and tools included.
+    <div className="cv" onKeyDown={onKeyDown}>
       <div
         ref={stage}
         className={`cv__stage tool-${tool} ${gesture.current?.kind === 'pan' ? 'is-panning' : ''}`}
@@ -565,7 +767,6 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
           if (e.target !== stage.current && e.target !== world.current) return;
           if (rights.add) make('normal', toWorld(e.clientX, e.clientY));
         }}
-        onKeyDown={onKeyDown}
         onPaste={onPaste}
         onDragOver={(e) => {
           if (rights.add && [...e.dataTransfer.types].includes('Files')) e.preventDefault();
@@ -668,6 +869,13 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
             </div>
           )}
           <span className="cv-tools__rule" />
+          <button type="button" className="cv-tools__btn" aria-label="Undo" title="Undo (Ctrl Z)" disabled={!history.current.undo.length} onClick={undo}>
+            <Icon name="undo" size={18} />
+          </button>
+          <button type="button" className="cv-tools__btn" aria-label="Redo" title="Redo (Ctrl Shift Z)" disabled={!history.current.redo.length} onClick={redo}>
+            <Icon name="redo" size={18} />
+          </button>
+          <span className="cv-tools__rule" />
           <button type="button" className="cv-tools__btn" aria-label="Add files" title="Add files (or drop them anywhere)" onClick={() => fileInput.current.click()}>
             <Icon name="paperclip" size={18} />
           </button>
@@ -695,16 +903,16 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
                   { head: 'both', label: 'Arrows at both ends' },
                   { head: 'none', label: 'No arrowheads' },
                 ].map((h) => (
-                  <button key={h.head} type="button" className={`cv-bar__btn ${selEdge.head === h.head ? 'is-on' : ''}`} title={h.label} aria-label={h.label} onClick={() => patchEdge(hubId, roomId, selEdge, { head: h.head })}>
+                  <button key={h.head} type="button" className={`cv-bar__btn ${selEdge.head === h.head ? 'is-on' : ''}`} title={h.label} aria-label={h.label} onClick={() => editEdge(selEdge, { head: h.head })}>
                     <HeadIcon head={h.head} />
                   </button>
                 ))}
-                <button type="button" className={`cv-bar__btn ${selEdge.dash ? 'is-on' : ''}`} title="Dashed" aria-label="Dashed" onClick={() => patchEdge(hubId, roomId, selEdge, { dash: !selEdge.dash })}>
+                <button type="button" className={`cv-bar__btn ${selEdge.dash ? 'is-on' : ''}`} title="Dashed" aria-label="Dashed" onClick={() => editEdge(selEdge, { dash: !selEdge.dash })}>
                   <svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 9h14" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" /></svg>
                 </button>
                 <span className="cv-bar__rule" />
                 {COLORS.map((c) => (
-                  <button key={c} type="button" className={`cv-bar__swatch ${(selEdge.color ?? COLORS[0]) === c ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => patchEdge(hubId, roomId, selEdge, { color: c === COLORS[0] ? null : c })} />
+                  <button key={c} type="button" className={`cv-bar__swatch ${(selEdge.color ?? COLORS[0]) === c ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => editEdge(selEdge, { color: c === COLORS[0] ? null : c })} />
                 ))}
                 <span className="cv-bar__rule" />
                 <button type="button" className="cv-bar__btn cv-bar__btn--text" onClick={() => setLabeling(selEdge)}>Label</button>
@@ -767,7 +975,7 @@ export default function Canvas({ nodes, edges, rights, uid, onWriting, onRoomNot
           edge={labeling}
           onDone={async (label) => {
             setLabeling(null);
-            if (label !== labeling.label) await patchEdge(hubId, roomId, labeling, { label }).catch(() => setError("That label didn't save."));
+            if (label !== labeling.label) await editEdge(labeling, { label });
           }}
         />
       )}
