@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLoaderData } from 'react-router-dom';
 import { HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
@@ -30,6 +30,13 @@ export default function Hub() {
   const { hub, roles, members, posts: loadedPosts } = useLoaderData();
   const { user, signIn } = useSession();
   const access = useHubAccess(hub, members);
+  const { remember } = useSession();
+  const inIt = !!user && (hub.ownerId === user.uid || members.some((m) => m.uid === user.uid));
+  // In this Hub but missing from your list of Hubs: put it back.
+  useEffect(() => {
+    if (inIt) remember?.(hub.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inIt, hub.id]);
   const [tab, setTab] = useState('board');
   const [sharing, setSharing] = useState(false);
   const [posts, setPosts] = useState(loadedPosts);
