@@ -1,0 +1,292 @@
+/* The dock keeps the notch floating at the top. Leaving the top of the page
+   plays one drop-in: the notch lifts away and comes back down from above,
+   then stays pinned while the page scrolls under it. */
+.notch-dock {
+  position: fixed;
+  top: 16px;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.notch-dock > * {
+  pointer-events: auto;
+}
+
+.notch-dock.is-pinned {
+  top: 12px;
+  animation: notch-drop-in 420ms var(--ease-out);
+}
+
+@keyframes notch-drop-in {
+  0% { transform: translateY(0); }
+  30% { transform: translateY(-160%); }
+  75% { transform: translateY(6px); }
+  100% { transform: translateY(0); }
+}
+
+.notch {
+  --y: 0px;
+  --d: 160ms;
+  --ease: var(--ease-out);
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(var(--page-max), 100%);
+  height: var(--notch-h);
+  padding: 0 8px 0 20px;
+  transform: translateY(var(--y));
+  transition: transform var(--d) var(--ease);
+}
+
+.notch__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid var(--border);
+  border-radius: var(--r-notch);
+  background: rgb(10 10 11 / 0.88);
+  backdrop-filter: blur(16px);
+  transition:
+    left var(--d) var(--ease),
+    right var(--d) var(--ease),
+    box-shadow var(--d) ease;
+}
+
+.is-pinned .notch__bg {
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+}
+
+.notch__title {
+  flex-shrink: 0;
+  padding-right: 10px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  transition: transform var(--d) var(--ease);
+}
+
+.notch__title:hover {
+  color: var(--text);
+}
+
+.notch__rest {
+  display: flex;
+  flex-grow: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  transition:
+    opacity var(--d) ease,
+    transform var(--d) var(--ease);
+}
+
+/* Page-change phases. */
+.notch[data-phase='drop'] { --y: 20px; --d: 120ms; }
+
+.notch[data-phase='squash'] { --y: 20px; --d: 180ms; --ease: cubic-bezier(0.5, 0, 0.3, 1); }
+.notch[data-phase='squash'] .notch__bg { left: var(--pill-inset); right: var(--pill-inset); }
+.notch[data-phase='squash'] .notch__title { transform: translateX(var(--to-center)); }
+.notch[data-phase='squash'] .notch__rest { opacity: 0; transform: scale(0.96); pointer-events: none; }
+
+.notch[data-phase='spring'] { --y: 24px; --d: 220ms; --ease: var(--ease-spring); }
+.notch[data-phase='spring'] .notch__bg { left: -10px; right: -10px; }
+
+.notch[data-phase='hover'] { --y: 20px; --d: 120ms; }
+.notch[data-phase='rise'] { --y: 0px; --d: 160ms; }
+
+/* Parts. */
+.notch__search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 180px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-input);
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.notch__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.notch__search:focus-within {
+  box-shadow: 0 0 0 1px var(--border-2);
+}
+
+.notch__divider {
+  width: 1px;
+  height: 28px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+.notch__spacer {
+  flex-grow: 1;
+}
+
+.notch__hubs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notch__hub {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9px;
+  transition: transform var(--d-press) ease;
+}
+
+.notch__hub:hover {
+  transform: translateY(-2px);
+}
+
+.notch__hub::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -11px;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background-color var(--d-panel) ease;
+}
+
+.notch__hub.active::after {
+  background: var(--text);
+}
+
+.notch__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px dashed var(--border-2);
+  border-radius: 9px;
+  color: var(--text-2);
+}
+
+.notch__add:hover {
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
+.notch__icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-input);
+  background: transparent;
+  color: var(--text);
+}
+
+.notch__icon:hover,
+.notch__icon.active,
+.notch__icon[aria-expanded='true'] {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.notch__dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #0a0a0b;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  box-sizing: content-box;
+}
+
+.notch__link {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-input);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.notch__link:hover,
+.notch__link.active {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.notch__me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px 0 4px;
+  border: 0;
+  border-radius: var(--r-input);
+  background: transparent;
+}
+
+.notch__me:hover,
+.notch__me[aria-expanded='true'] {
+  background: var(--hover);
+}
+
+.notch__name {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .notch__name,
+  .notch__link--buddies {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .notch__search {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .notch {
+    padding-left: 14px;
+  }
+
+  .notch__hubs .notch__hub:nth-child(n + 4),
+  .notch__divider,
+  .notch__link,
+  .notch__add,
+  .notch__rest > .menu:first-of-type,
+  .notch__rest > .menu:last-of-type {
+    display: none;
+  }
+}

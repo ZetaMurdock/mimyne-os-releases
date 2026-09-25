@@ -1,0 +1,76 @@
+.thread__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  align-self: flex-start;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.thread__back:hover {
+  color: var(--text);
+}
+
+.thread__signin {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-4) 18px;
+  border: 1px dashed var(--border-2);
+  border-radius: 16px;
+  background: none;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: left;
+}
+
+.thread__signin:hover {
+  color: var(--text);
+}
+
+.thread__count {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.thread__count strong {
+  color: var(--text);
+}
+
+.thread__comments {
+  display: flex;
+  flex-direction: column;
+}
+
+.thread__hub {
+  overflow: hidden;
+}
+
+.thread__hub-banner {
+  height: 64px;
+}
+
+.thread__hub-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: -24px;
+  padding: 0 18px 18px;
+  font-size: 13px;
+}
+
+.thread__hub-icon .hub-icon {
+  box-shadow: 0 0 0 3px var(--surface-1);
+}
+
+.thread__hub-name {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.thread__hub-name:hover {
+  color: var(--text);
+  text-decoration: underline;
+}

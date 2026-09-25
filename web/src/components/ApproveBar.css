@@ -1,0 +1,74 @@
+.approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+
+.approve--small {
+  height: 28px;
+  padding: 0;
+  background: transparent;
+}
+
+.approve__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  transition: transform var(--d-press) ease, background-color var(--d-press) ease;
+}
+
+.approve--small .approve__btn {
+  width: 28px;
+  height: 28px;
+}
+
+.approve__btn:hover {
+  background: var(--hover);
+}
+
+.approve__btn:active {
+  transform: scale(0.9);
+}
+
+.approve__btn--up {
+  color: var(--approve);
+}
+
+.approve__btn--down {
+  color: var(--text-3);
+}
+
+.approve__btn--up.is-on svg {
+  animation: approve-pop 320ms var(--ease-spring);
+}
+
+.approve__count {
+  min-width: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.approve--small .approve__count {
+  min-width: 14px;
+  font-size: 12px;
+}
+
+.approve__count.is-on {
+  color: var(--approve);
+}
+
+@keyframes approve-pop {
+  0% { transform: scale(1) translateY(0); }
+  45% { transform: scale(1.35) translateY(-3px); }
+  100% { transform: scale(1) translateY(0); }
+}
