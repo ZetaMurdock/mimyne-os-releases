@@ -1,0 +1,45 @@
+.share__link,
+.share__name {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.share__link .field__input,
+.share__name .field__input {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.share__heading {
+  margin-top: var(--s-2);
+}
+
+.share__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.share__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 48px;
+  padding: 0 4px;
+}
+
+.share__row-name {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share__none {
+  font-size: 13px;
+}

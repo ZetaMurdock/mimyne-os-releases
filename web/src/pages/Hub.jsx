@@ -7,6 +7,7 @@ import Icon from '../components/Icon.jsx';
 import PledgeButton from '../components/PledgeButton.jsx';
 import PostCard from '../components/PostCard.jsx';
 import RoleChip from '../components/RoleChip.jsx';
+import ShareDialog from '../components/ShareDialog.jsx';
 import { Avatar } from '../components/Avatar.jsx';
 import { createPost, getHub } from '../data/api.js';
 import { usePerson } from '../data/people.js';
@@ -30,6 +31,7 @@ export default function Hub() {
   const { user, signIn } = useSession();
   const access = useHubAccess(hub, members);
   const [tab, setTab] = useState('board');
+  const [sharing, setSharing] = useState(false);
   const [posts, setPosts] = useState(loadedPosts);
 
   const roleOf = (uid) => roles.find((r) => r.id === members.find((m) => m.uid === uid)?.role) ?? null;
@@ -56,12 +58,7 @@ export default function Hub() {
           </p>
         </div>
         <div className="hub__actions">
-          <Button
-            icon="share"
-            iconOnly
-            aria-label="Copy a link to this Hub"
-            onClick={() => navigator.clipboard?.writeText(location.href).catch(() => {})}
-          />
+          <Button icon="share" iconOnly aria-label="Share this Hub" onClick={() => setSharing(true)} />
           <PledgeButton hub={hub} />
         </div>
       </div>
@@ -141,6 +138,14 @@ export default function Hub() {
           </section>
         </aside>
       </div>
+      {sharing && (
+        <ShareDialog
+          title={`Share ${hub.name}`}
+          link={`/h/${hub.id}`}
+          payload={{ text: `${hub.name}: ${location.origin}/h/${hub.id}` }}
+          onClose={() => setSharing(false)}
+        />
+      )}
     </div>
   );
 }

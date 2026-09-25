@@ -28,6 +28,12 @@
   (function () {
     var name = new URLSearchParams(location.search).get('u') || '';
     if (!/^[A-Za-z0-9_.]{1,32}$/.test(name)) return;
+    // mimyne.com has real profile pages now: /u/<name>. Links from the app
+    // (Discord's "View my Mimyne profile") still come here as /u/?u=<name>.
+    if (location.hostname === 'mimyne.com' && /^[A-Za-z0-9_]{3,20}$/.test(name)) {
+      location.replace('/u/' + encodeURIComponent(name));
+      return;
+    }
     document.title = '@' + name + ' on Mimyne';
     document.getElementById('who').textContent = '@' + name + ' is on Mimyne';
     document.getElementById('how').textContent = 'Already have Mimyne? Open it, go to Buddies, and add @' + name + '.';

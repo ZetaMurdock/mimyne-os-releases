@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate, useNavigation } from 'react-ro
 import { Avatar, HubIcon } from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import Menu, { MenuItem } from './Menu.jsx';
+import NotificationBell from './NotificationBell.jsx';
 import { getHubCard, getHubCards } from '../data/api.js';
 import { useSession } from '../data/session.jsx';
 import './Notch.css';
@@ -152,16 +153,7 @@ function Notch() {
 
         <span className="notch__spacer" />
 
-        <Menu
-          label="Notifications"
-          trigger={({ toggle, ...aria }) => (
-            <button type="button" className="notch__icon" onClick={toggle} {...aria}>
-              <Icon name="bell" size={18} />
-            </button>
-          )}
-        >
-          <p className="menu__note">You're all caught up.</p>
-        </Menu>
+        <NotificationBell me={user} />
         <NavLink to="/messages" className="notch__icon" aria-label="Messages">
           <Icon name="message" size={18} />
         </NavLink>
@@ -183,6 +175,7 @@ function Notch() {
             </button>
           )}
         >
+          <MenuItem as={Link} to={`/u/${encodeURIComponent(user.username)}`}>Your profile</MenuItem>
           <MenuItem as={Link} to="/hubs/new">Start a Hub</MenuItem>
           <MenuItem onClick={signOut}>Sign out</MenuItem>
         </Menu>

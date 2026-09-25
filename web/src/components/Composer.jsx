@@ -78,6 +78,13 @@ export default function Composer({
           value={text}
           autoFocus={autoFocus}
           onChange={(e) => setText(e.target.value)}
+          // Pictures and GIFs pasted straight in are attached.
+          onPaste={(e) => {
+            if (e.clipboardData.files.length) {
+              e.preventDefault();
+              addFiles(e.clipboardData.files);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e);
           }}
