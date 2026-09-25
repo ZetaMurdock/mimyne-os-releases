@@ -40,6 +40,7 @@ const router = createBrowserRouter([
                 { path: 'feed', lazy: page(() => import('./pages/Feed.jsx'), 'feedLoader') },
                 { path: 'messages', lazy: page(() => import('./pages/Messages.jsx')) },
                 { path: 'messages/:id', lazy: page(() => import('./pages/Messages.jsx')) },
+                { path: 'staff/reports', lazy: page(() => import('./pages/Reports.jsx')) },
               ]
             : []),
           { path: '*', element: <NotFound /> },

@@ -1,0 +1,125 @@
+/* Reports, for Mimyne's staff. */
+
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  width: min(760px, 100% - 32px);
+  margin: 96px auto 64px;
+}
+
+.reports--empty {
+  align-items: center;
+  text-align: center;
+}
+
+.reports__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.reports__title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.reports__tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.reports__none {
+  padding: 48px 0;
+  text-align: center;
+}
+
+.reports__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.report-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+}
+
+.report-row__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.report-row__names {
+  display: flex;
+  flex-grow: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.report-row__target {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.report-row__repeat {
+  color: #f87171;
+  font-weight: 500;
+}
+
+.report-row__kind {
+  padding: 2px 8px;
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.report-row__reason {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.report-row__excerpt {
+  max-height: 120px;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  border-left: 3px solid var(--border-2);
+  color: var(--text-2);
+  font-size: 13.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.report-row__details {
+  color: var(--text-2);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.report-row__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.report-row__spacer {
+  flex-grow: 1;
+}

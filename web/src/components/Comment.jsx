@@ -9,7 +9,8 @@ import RoleChip from './RoleChip.jsx';
 import { FileCard } from './FileCard.jsx';
 import { useVotes } from './useVotes.js';
 import { LinkedText } from './LinkPreview.jsx';
-import { postRef } from '../data/api.js';
+import ReportDialog from './ReportDialog.jsx';
+import { postRef, postUrl } from '../data/api.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
 import { timeAgo } from '../lib/format.js';
@@ -22,6 +23,7 @@ export default function Comment({ comment, post, roleOf, canModerate, depth = 0,
   const [collapsed, setCollapsed] = useState(false);
   const [replying, setReplying] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const author = usePerson(comment.authorUid, comment.authorName);
   const votes = useVotes(doc(postRef(post.scope, post.id), 'comments', comment.id), {
     about: { scope: post.scope, postId: post.id, commentId: comment.id, authorUid: comment.authorUid },
@@ -65,7 +67,18 @@ export default function Comment({ comment, post, roleOf, canModerate, depth = 0,
                   Delete
                 </Button>
               )}
+              {user && !mine && (
+                <Button variant="ghost" size="sm" onClick={() => setReporting(true)}>
+                  Report
+                </Button>
+              )}
             </div>
+            {reporting && (
+              <ReportDialog
+                about={{ targetUid: comment.authorUid, kind: 'comment', link: postUrl(post), excerpt: comment.text }}
+                onClose={() => setReporting(false)}
+              />
+            )}
             {replying && (
               <Composer
                 compact

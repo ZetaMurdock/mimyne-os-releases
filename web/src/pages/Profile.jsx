@@ -8,6 +8,7 @@ import Composer from '../components/Composer.jsx';
 import Icon from '../components/Icon.jsx';
 import PostCard from '../components/PostCard.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
+import ReportDialog from '../components/ReportDialog.jsx';
 import MedalClips, { MedalClipsPage } from '../components/profile/MedalClips.jsx';
 import { NowPlayingCard } from '../components/profile/NowPlaying.jsx';
 import SongsPlayer from '../components/profile/SongsPlayer.jsx';
@@ -61,6 +62,7 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
   const [buddy, setBuddy] = useState(buddyAt);
   const [busy, setBusy] = useState(null);
   const [sharing, setSharing] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const [view, setView] = useState('profile');
   const [presence, setPresence] = useState({ listening: null, playing: null });
   const [error, setError] = useState(null);
@@ -184,6 +186,7 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
               >
                 {stalking ? 'Stalking' : 'Stalk'}
               </Button>
+              <Button variant="ghost" icon="flag" iconOnly aria-label="Report this person" title="Report" onClick={() => setReporting(true)} />
             </>
           )}
         </div>
@@ -253,6 +256,12 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
         </div>
       )}
 
+      {reporting && (
+        <ReportDialog
+          about={{ targetUid: profile.uid, kind: 'person', link: `/u/${encodeURIComponent(profile.username)}`, excerpt: page?.bio ?? '' }}
+          onClose={() => setReporting(false)}
+        />
+      )}
       {sharing && (
         <ShareDialog
           title={mine ? 'Share your profile' : `Share @${profile.username}`}

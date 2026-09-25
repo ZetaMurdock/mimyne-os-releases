@@ -4,6 +4,7 @@ import Button from '../Button.jsx';
 import Dialog from '../Dialog.jsx';
 import Icon from '../Icon.jsx';
 import LinkPreview from '../LinkPreview.jsx';
+import ReportDialog from '../ReportDialog.jsx';
 import { useVotes } from '../useVotes.js';
 import { clipFromLink, clipRef, myMedal, removeClip, shareClip, watchClips } from '../../data/clips.js';
 import { usePerson } from '../../data/people.js';
@@ -90,6 +91,7 @@ function ClipTile({ hub, clip, user, playing, onPlay, onStop, canRemove }) {
   const by = usePerson(clip.by);
   const votes = useVotes(clipRef(hub.id, clip.id));
   const [fileUrl, setFileUrl] = useState(null);
+  const [reporting, setReporting] = useState(false);
   const embed = clip.source === 'medal' ? clipEmbedUrl(clip.url) : null;
 
   useEffect(() => {
@@ -160,8 +162,19 @@ function ClipTile({ hub, clip, user, playing, onPlay, onStop, canRemove }) {
               <Icon name="trash" size={14} />
             </button>
           )}
+          {user && clip.by !== user.uid && (
+            <button type="button" className="hclip__remove" aria-label="Report this clip" title="Report" onClick={() => setReporting(true)}>
+              <Icon name="flag" size={14} />
+            </button>
+          )}
         </div>
       </div>
+      {reporting && (
+        <ReportDialog
+          about={{ targetUid: clip.by, kind: 'clip', link: `/h/${hub.id}?tab=clips`, excerpt: [clip.title, clip.url].filter(Boolean).join(' · ') }}
+          onClose={() => setReporting(false)}
+        />
+      )}
     </article>
   );
 }

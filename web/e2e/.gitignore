@@ -1,0 +1,4 @@
+# Copied from the app repository by prepare.mjs.
+firestore.rules
+firestore.indexes.json
+*-debug.log

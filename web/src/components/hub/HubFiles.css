@@ -24,6 +24,33 @@
   font-size: 14px;
 }
 
+.shelf__storage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.shelf__storage-bar {
+  width: 80px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.shelf__storage-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--text-3);
+}
+
+.shelf__storage.is-full .shelf__storage-bar > span {
+  background: #f87171;
+}
+
 .shelf__drop {
   display: flex;
   align-items: center;
