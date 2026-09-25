@@ -1,0 +1,75 @@
+# The staging site: mimyne.com's code on a practice copy of Mimyne, with its
+# own Firebase project, accounts, data and file service, so a change can be
+# tried by hand before it reaches real people.
+#
+# - Every pull request that touches web/ gets its own preview link, posted on
+#   the pull request and kept for 7 days.
+# - Every push to main updates the fixed staging address,
+#   https://<staging project>.web.app.
+#
+# Setup (once; docs/operations.md in ZetaMurdock/mimyne-os has the steps):
+#   variables  STAGING_FIREBASE_PROJECT_ID, STAGING_FIREBASE_API_KEY,
+#              STAGING_FIREBASE_MESSAGING_SENDER_ID, STAGING_FIREBASE_APP_ID,
+#              STAGING_FILES_URL (the staging Worker's address)
+#   secret     FIREBASE_STAGING_SERVICE_ACCOUNT
+# Until the project variable is set, this does nothing.
+name: Staging site
+
+on:
+  pull_request:
+    paths: ['web/**', '.github/workflows/staging.yml']
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/staging.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+concurrency:
+  group: staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to staging
+    if: vars.STAGING_FIREBASE_PROJECT_ID != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+        env:
+          VITE_SOCIAL: 'true'
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.STAGING_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_API_KEY: ${{ vars.STAGING_FIREBASE_API_KEY }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.STAGING_FIREBASE_APP_ID }}
+          VITE_FILES_URL: ${{ vars.STAGING_FILES_URL }}
+      - name: Preview for this pull request
+        if: github.event_name == 'pull_request'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.STAGING_FIREBASE_PROJECT_ID }}
+          entryPoint: web
+          expires: 7d
+      - name: The staging address
+        if: github.event_name != 'pull_request'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.STAGING_FIREBASE_PROJECT_ID }}
+          entryPoint: web
+          channelId: live
