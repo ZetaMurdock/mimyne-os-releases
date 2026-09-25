@@ -2,6 +2,8 @@ import { useId, useRef, useState } from 'react';
 import { Avatar } from './Avatar.jsx';
 import Button from './Button.jsx';
 import { PendingFile } from './FileCard.jsx';
+import MediaPicker from './MediaPicker.jsx';
+import { insertAt, placeCaret } from '../lib/insert.js';
 import { uploadPicked } from '../lib/files.js';
 import { useSession } from '../data/session.jsx';
 import './Composer.css';
@@ -28,6 +30,7 @@ export default function Composer({
   const [error, setError] = useState(null);
   const fileInput = useRef(null);
   const mediaInput = useRef(null);
+  const textInput = useRef(null);
   const selectId = useId();
 
   const canSend = !sending && (text.trim() || files.length);
@@ -35,6 +38,25 @@ export default function Composer({
   function addFiles(list) {
     const picked = [...list].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}`, file }));
     setFiles((prev) => [...prev, ...picked.filter((p) => !prev.some((q) => q.id === p.id))].slice(0, 10));
+  }
+
+  function addEmoji(char) {
+    const next = insertAt(textInput.current, text, char);
+    setText(next.value);
+    placeCaret(textInput.current, next.caret);
+  }
+
+  // A GIF or saved link goes in the words (it shows as the picture, the
+  // address hidden); something from your library is attached as it is.
+  function addMedia(media) {
+    const url = media.kind === 'gif' ? media.url : media.item.url;
+    if (media.kind === 'library' && media.item.kind === 'file') {
+      const { item } = media;
+      const label = { name: item.name, size: item.size, type: item.type, path: item.path };
+      setFiles((prev) => [...prev, { id: `lib-${item.id}-${Date.now()}`, file: label, label }].slice(0, 10));
+      return;
+    }
+    setText((t) => (t.trim() ? `${t.trimEnd()}\n${url}` : url));
   }
 
   async function submit(event) {
@@ -71,6 +93,7 @@ export default function Composer({
       <div className="composer__row">
         {!compact && <Avatar person={user} size={40} />}
         <textarea
+          ref={textInput}
           className="composer__input"
           aria-label={placeholder}
           placeholder={placeholder}
@@ -124,6 +147,7 @@ export default function Composer({
         <Button variant="ghost" icon="image" iconOnly={compact} aria-label="Add a photo or video" onClick={() => mediaInput.current.click()}>
           Photo or video
         </Button>
+        <MediaPicker onEmoji={addEmoji} onPick={addMedia} placement="down" />
         <span className="composer__spacer" />
         {destinations && (
           <>

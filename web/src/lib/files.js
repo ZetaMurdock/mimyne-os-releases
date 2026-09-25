@@ -76,7 +76,9 @@ export async function uploadFile(file, onProgress = () => {}) {
 }
 
 /** A picked file's label, saying so when a picture, video or song goes as a plain file. */
-export async function uploadPicked({ file, display = true }, onProgress) {
+export async function uploadPicked({ file, label: ready, display = true }, onProgress) {
+  // Something already uploaded (from the media library) goes as it is.
+  if (ready) return ready;
   const label = await uploadFile(file, onProgress);
   return display === false && showable(file) ? { ...label, display: false } : label;
 }
@@ -100,3 +102,12 @@ export function fileLink(path) {
 
 /** Pictures, videos and songs can be shown in place, or sent as plain files. */
 export const showable = (file) => /^(image|video|audio)\//.test(file?.type ?? '');
+
+/** Remove one of your own uploaded files for good. */
+export async function deleteFile(path) {
+  if (!auth.currentUser) return;
+  await fetch(`${FILES_URL}/files/${path.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${await auth.currentUser.getIdToken()}` },
+  });
+}
