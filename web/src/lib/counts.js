@@ -1,18 +1,24 @@
-// Counts (approvals, views, comments) asked of Firestore politely. Each post
-// on a page needs several, and a page of posts asking all at once gets
-// "too many requests" back, which showed as every count going to 0. So they
-// go a few at a time, the same count is asked once however many cards want
-// it, answers are kept for a minute, and a "slow down" is retried after a
-// pause.
-import { getCountFromServer } from 'firebase/firestore';
+// Counts (approvals, views, comments), asked of Firestore politely. Each post
+// on a page needs several: they go a few at a time, the same count is asked
+// once however many cards want it, and answers are kept for a minute.
+//
+// Firestore can refuse count queries outright ("resource-exhausted", 429)
+// while ordinary reads still work; the site then showed every approval as 0
+// and hid views, though the app, which reads the votes themselves, showed
+// them. So when a count is refused, it's worked out from the documents
+// instead (at most MAX_READ of them), and count queries rest for a while
+// rather than being asked again and again.
+import { getCountFromServer, getDocs, limit, query as narrowed } from 'firebase/firestore';
 
 const AT_ONCE = 4;
 const KEEP_MS = 60_000;
-const RETRIES = 3;
+const REST_MS = 5 * 60_000;
+const MAX_READ = 500;
 
 let running = 0;
 const waiting = [];
 const known = new Map(); // key -> { at, promise }
+let restUntil = 0; // count queries are skipped until then
 
 function next() {
   while (running < AT_ONCE && waiting.length) {
@@ -25,25 +31,28 @@ function next() {
   }
 }
 
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const busy = (error) => error?.code === 'resource-exhausted' || error?.code === 'unavailable';
+const refused = (error) => error?.code === 'resource-exhausted';
+
+/** The count from the documents themselves, the way the app counts. */
+async function byReading(query) {
+  return (await getDocs(narrowed(query, limit(MAX_READ)))).size;
+}
+
+async function count(query) {
+  if (Date.now() >= restUntil) {
+    try {
+      return (await getCountFromServer(query)).data().count;
+    } catch (error) {
+      if (!refused(error)) throw error;
+      restUntil = Date.now() + REST_MS;
+    }
+  }
+  return byReading(query);
+}
 
 function ask(query) {
   return new Promise((resolve, reject) => {
-    waiting.push(async () => {
-      for (let attempt = 0; ; attempt += 1) {
-        try {
-          resolve((await getCountFromServer(query)).data().count);
-          return;
-        } catch (error) {
-          if (!busy(error) || attempt >= RETRIES) {
-            reject(error);
-            return;
-          }
-          await pause(800 * 2 ** attempt + Math.random() * 400);
-        }
-      }
-    });
+    waiting.push(() => count(query).then(resolve, reject));
     next();
   });
 }
