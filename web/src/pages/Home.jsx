@@ -5,9 +5,9 @@ import { useWindowsDownload } from '../lib/useWindowsDownload.js';
 import './Home.css';
 
 const PREVIEW_PEOPLE = [
-  { id: 'kai', name: 'Kai', color: '#f2b84b' },
-  { id: 'dex', name: 'Dex', color: '#5eead4' },
-  { id: 'rae', name: 'Rae', color: '#f9a8d4' },
+  { uid: 'kai', username: 'Kai' },
+  { uid: 'dex', username: 'Dex' },
+  { uid: 'rae', username: 'Rae' },
 ];
 
 export default function Home() {
@@ -33,7 +33,7 @@ export default function Home() {
           <div className="home__window-bar">
             <span className="home__window-name">Level 3 blockout</span>
             <span className="home__spacer" />
-            <AvatarStack users={PREVIEW_PEOPLE} size={26} />
+            <AvatarStack people={PREVIEW_PEOPLE} size={26} />
             <span className="muted home__here">3 here now</span>
           </div>
           <div className="home__canvas">
