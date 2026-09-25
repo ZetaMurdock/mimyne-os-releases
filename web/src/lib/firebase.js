@@ -2,8 +2,8 @@
 // These values identify the project; they aren't secrets. What protects the
 // data is firestore.rules in the app's repo.
 import { initializeApp } from 'firebase/app';
-import { GoogleAuthProvider, OAuthProvider, getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { GoogleAuthProvider, OAuthProvider, connectAuthEmulator, getAuth, onAuthStateChanged } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 
 const app = initializeApp({
   apiKey: 'AIzaSyCZyboOnL4Hv7v62DHxgkXVtsqs40w4-y8',
@@ -16,6 +16,13 @@ const app = initializeApp({
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// `VITE_EMULATORS=true npm run dev` points the site at the local Firebase
+// emulators (auth on 9099, Firestore on 8085, as in the app's firebase.json).
+if (import.meta.env.DEV && import.meta.env.VITE_EMULATORS === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8085);
+}
 
 export const googleProvider = new GoogleAuthProvider();
 // 'common' lets personal and work or school Microsoft accounts both in, as in the app.

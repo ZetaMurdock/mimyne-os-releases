@@ -32,6 +32,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run build
+        env:
+          # Sign-in, Hubs, the feed and messages (see web/src/lib/features.js).
+          VITE_SOCIAL: 'true'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist

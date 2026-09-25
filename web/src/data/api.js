@@ -327,7 +327,10 @@ function cleanConversation(id, data, uid) {
 export function watchConversations(uid, onChange, onError) {
   return onSnapshot(
     query(collection(db, 'conversations'), where('members', 'array-contains', uid)),
-    (snap) => onChange(snap.docs.map((d) => cleanConversation(d.id, d.data(), uid)).sort((a, b) => b.at - a.at)),
+    // Metadata changes too, so a conversation you just started is marked
+    // pending until the server has it (its messages can't be read before).
+    { includeMetadataChanges: true },
+    (snap) => onChange(snap.docs.map((d) => ({ ...cleanConversation(d.id, d.data(), uid), pending: d.metadata.hasPendingWrites })).sort((a, b) => b.at - a.at)),
     onError,
   );
 }
@@ -363,8 +366,11 @@ export async function openDirect(uid, otherUid) {
   if (otherUid === uid) throw new Error("That's you.");
   const members = [uid, otherUid].sort();
   const id = members.join('__');
-  const existing = await readOrMissing(doc(db, 'conversations', id));
-  if (!existing) {
+  // Looked for among your own conversations: the rules refuse a read of one
+  // that doesn't exist yet (even as a query naming its id), and that refusal
+  // can wedge the Firestore client while the inbox is listening.
+  const mine = await getDocs(query(collection(db, 'conversations'), where('members', 'array-contains', uid)));
+  if (!mine.docs.some((d) => d.id === id)) {
     try {
       await setDoc(doc(db, 'conversations', id), { kind: 'direct', members, createdBy: uid, createdAt: serverTimestamp() });
     } catch (error) {

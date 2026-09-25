@@ -43,6 +43,11 @@ function Inbox({ me }) {
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
   const active = conversations?.find((c) => c.id === id) ?? (id ? null : conversations?.[0]);
+  // A conversation counts as started once the server has had it, even while
+  // a later change (a new last message) is still on its way.
+  const started = useRef(new Set());
+  for (const c of conversations ?? []) if (!c.pending) started.current.add(c.id);
+  const ready = active && started.current.has(active.id);
 
   useEffect(() => watchConversations(me.uid, setConversations, () => setError("Messages couldn't load.")), [me.uid]);
   useEffect(() => {
@@ -63,7 +68,11 @@ function Inbox({ me }) {
         ))}
       </nav>
 
-      {active ? <Conversation key={active.id} convo={active} me={me} /> : <div className="inbox__blank muted">{conversations ? 'Pick a conversation.' : ''}</div>}
+      {ready ? (
+        <Conversation key={active.id} convo={active} me={me} />
+      ) : (
+        <div className="inbox__blank muted">{active ? 'Starting the conversation…' : conversations ? 'Pick a conversation.' : ''}</div>
+      )}
 
       {starting && (
         <NewMessage
