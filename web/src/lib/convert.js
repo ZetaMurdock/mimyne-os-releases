@@ -86,7 +86,11 @@ export async function convertFile(file, target, onStep = () => {}) {
 }
 
 async function fetchWithProgress(url, expected, onProgress) {
-  const res = await fetch(url);
+  // Past the browser's cache: a thumbnail may have stored this same link
+  // without the Worker's CORS header (an <img> doesn't ask for it), and a
+  // cached copy like that is refused to a script.
+  const res = await fetch(url, { cache: 'no-store' }).catch(() => null);
+  if (!res) throw new Error("The file couldn't be fetched to convert. Check your connection and try again.");
   if (!res.ok) throw new Error("The file couldn't be fetched to convert.");
   const total = Number(res.headers.get('content-length')) || expected || 0;
   if (!res.body || !total) return res.blob();
