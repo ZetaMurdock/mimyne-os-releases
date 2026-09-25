@@ -8,21 +8,21 @@ import { notifyVote } from '../data/notifications.js';
 // background.
 // `about` ({scope, postId, commentId?, authorUid}) says whose it is, so a
 // vote can tell them.
-export function useVotes(ref, { comments = false, about = null, onVoted = null } = {}) {
+export function useVotes(ref, { comments = false, views = false, about = null, onVoted = null } = {}) {
   const { user, signIn } = useSession();
-  const [stats, setStats] = useState({ approvals: null, mine: null, comments: null });
+  const [stats, setStats] = useState({ approvals: null, mine: null, comments: null, views: null });
   const key = ref?.path;
 
   useEffect(() => {
     if (!ref) return undefined;
     let live = true;
-    getStats(ref, user?.uid, { comments }).then((s) => live && setStats(s));
+    getStats(ref, user?.uid, { comments, views }).then((s) => live && setStats(s));
     return () => {
       live = false;
     };
     // The ref's path is what identifies it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, user?.uid, comments]);
+  }, [key, user?.uid, comments, views]);
 
   async function onVote(next) {
     if (!user) {

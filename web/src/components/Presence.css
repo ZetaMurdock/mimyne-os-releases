@@ -1,0 +1,111 @@
+.with-status {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.with-status .status-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.status-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-dot.is-online {
+  background: var(--live, #4ade80);
+}
+
+.status-dot.is-away {
+  background: var(--approve, #f2b84b);
+}
+
+.status-dot.is-invisible {
+  border: 2px solid var(--text-3);
+  background: transparent;
+}
+
+.status-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.status-line__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.status-line.is-online .status-line__dot {
+  background: var(--live, #4ade80);
+}
+
+.status-line.is-away .status-line__dot {
+  background: var(--approve, #f2b84b);
+}
+
+.status-line.is-offline {
+  color: var(--text-3);
+}
+
+.status-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-controls__modes {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+}
+
+.status-controls__modes button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-controls__modes button[aria-checked='true'] {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.status-controls__modes .status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.status-controls__note {
+  font-size: 12px;
+}
+
+.status-controls__share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}

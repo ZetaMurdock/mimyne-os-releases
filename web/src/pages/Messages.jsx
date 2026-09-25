@@ -6,6 +6,7 @@ import Dialog from '../components/Dialog.jsx';
 import Icon from '../components/Icon.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
 import MediaPicker from '../components/MediaPicker.jsx';
+import { StatusLine } from '../components/Presence.jsx';
 import { insertAt, placeCaret } from '../lib/insert.js';
 import { SharedPost, SharedProfile } from '../components/ShareCards.jsx';
 import { LinkedText } from '../components/LinkPreview.jsx';
@@ -228,7 +229,11 @@ function Conversation({ convo, me }) {
           {person ? <Link to={`/people/${person.uid}`}>{icon(36)}</Link> : icon(36)}
           <span className="inbox__head-text">
             <span className="inbox__head-title">{title}</span>
-            {person && <Link to={`/people/${person.uid}`} className="inbox__head-sub">@{person.username}</Link>}
+            {person && (
+              <Link to={`/people/${person.uid}`} className="inbox__head-sub">
+                <StatusLine uid={person.uid} />
+              </Link>
+            )}
           </span>
         </header>
 

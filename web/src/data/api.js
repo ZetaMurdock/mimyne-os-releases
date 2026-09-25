@@ -268,9 +268,9 @@ export function deleteComment(scope, postId, commentId) {
 // ------------------------------------------------------------ approvals
 
 /** Approvals, the viewer's own vote, and how many comments, for a post or comment. */
-export async function getStats(ref, uid, { comments = false } = {}) {
+export async function getStats(ref, uid, { comments = false, views = false } = {}) {
   const likes = collection(ref, 'likes');
-  const [approvals, mine, commentCount] = await Promise.all([
+  const [approvals, mine, commentCount, viewCount] = await Promise.all([
     // An approval written by the app carries no vote field (only a
     // disapproval says 'down'), so approvals are everything else.
     Promise.all([
@@ -279,8 +279,20 @@ export async function getStats(ref, uid, { comments = false } = {}) {
     ]).then(([all, down]) => all - down).catch(() => 0),
     uid ? getDoc(doc(likes, uid)).then((s) => (s.exists() ? s.data().vote ?? 'up' : null)).catch(() => null) : null,
     comments ? getCountFromServer(collection(ref, 'comments')).then((s) => s.data().count).catch(() => 0) : null,
+    views ? getCountFromServer(collection(ref, 'views')).then((s) => s.data().count).catch(() => null) : null,
   ]);
-  return { approvals, mine, comments: commentCount };
+  return { approvals, mine, comments: commentCount, views: viewCount };
+}
+
+// Posts already counted as seen by this person, this visit.
+const seen = new Set();
+
+/** A view, once per person per post: their own document under the post, written once. */
+export function recordView(post, uid) {
+  const key = `${post.scope.hubId ?? post.scope.profileUid}/${post.id}`;
+  if (!uid || seen.has(key)) return;
+  seen.add(key);
+  setDoc(doc(postRef(post.scope, post.id), 'views', uid), { at: serverTimestamp() }).catch(() => {});
 }
 
 /** 'up', 'down', or null to take a vote back. */
@@ -296,34 +308,79 @@ export async function getBuddies(uid) {
   return snap.docs.map((d) => (d.data().users ?? []).find((u) => u !== uid)).filter(Boolean);
 }
 
-/** Recent posts from the Hubs someone pledged to, their Buddies and themself. */
+/**
+ * Keeps your buddy list where your buddies can read it (buddy_lists/<uid>),
+ * so their feeds can reach your buddies too.
+ */
+async function shareBuddyList(uid, buddies) {
+  await setDoc(doc(db, 'buddy_lists', uid), { buddies: buddies.slice(0, 500), updatedAt: serverTimestamp() }).catch(() => {});
+}
+
+/** Your buddies' buddies, as their buddy lists say. */
+async function buddiesOfBuddies(uid, buddies) {
+  const lists = await Promise.all(buddies.slice(0, 40).map((b) =>
+    getDoc(doc(db, 'buddy_lists', b)).then((snap) => (snap.exists() && Array.isArray(snap.data().buddies) ? snap.data().buddies : [])).catch(() => [])));
+  const mine = new Set([uid, ...buddies]);
+  return [...new Set(lists.flat().filter((id) => typeof id === 'string' && !mine.has(id)))].slice(0, 60);
+}
+
+/** Posts in some Hubs, for the feed (also when the list of your Hubs arrives late). */
+export async function hubPosts(hubIds, count = 10) {
+  const lists = await Promise.all(hubIds.map((hubId) => listPosts({ hubId }, count)));
+  return lists.flat().map((p) => ({ ...p, circle: 'hubs' }));
+}
+
+/**
+ * The feed: your own posts, your buddies', their buddies', people you stalk,
+ * the Hubs you pledged to, and what's popular on public Hubs, each tagged
+ * with where it came from, with views, approvals and comments to rank by.
+ */
 export async function getFeed() {
   const user = await authReady;
   if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
   const uid = user.uid;
-  const [pledgedSnap, buddies, stalking] = await Promise.all([
+  const [pledgedSnap, buddies, stalking, publicHubs] = await Promise.all([
     getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).catch((error) => {
       console.error("Mimyne couldn't list the Hubs you pledged to:", error);
       return { docs: [] };
     }),
     getBuddies(uid).catch(() => []),
     listStalking(uid).catch(() => []),
-  ]);
-  const pledged = pledgedSnap.docs.map((d) => d.ref.parent.parent.id);
-  const scopes = [
-    ...pledged.map((hubId) => ({ hubId })),
-    ...[...new Set([uid, ...buddies, ...stalking])].map((profileUid) => ({ profileUid })),
-  ];
-  const [lists, discover, hubs] = await Promise.all([
-    Promise.all(scopes.map((s) => listPosts(s, 10))),
     discoverHubs(12).catch(() => []),
+  ]);
+  shareBuddyList(uid, buddies);
+  const pledged = pledgedSnap.docs.map((d) => d.ref.parent.parent.id);
+  const fof = await buddiesOfBuddies(uid, buddies).catch(() => []);
+  const popular = publicHubs.filter((h) => !pledged.includes(h.id)).slice(0, 6);
+
+  const people = new Map();
+  const put = (id, circle) => !people.has(id) && people.set(id, circle);
+  put(uid, 'you');
+  buddies.forEach((id) => put(id, 'buddies'));
+  stalking.forEach((id) => put(id, 'stalking'));
+  fof.forEach((id) => put(id, 'fof'));
+
+  const [personLists, mineHubs, popularLists, hubs] = await Promise.all([
+    Promise.all([...people].map(([id, circle]) => listPosts({ profileUid: id }, circle === 'fof' ? 4 : 8).then((l) => l.map((p) => ({ ...p, circle }))))),
+    hubPosts(pledged, 10),
+    Promise.all(popular.map((h) => listPosts({ hubId: h.id }, 6).then((l) => l.map((p) => ({ ...p, circle: 'popular' }))))),
     getHubCards(pledged),
   ]);
+  const posts = [...personLists.flat(), ...mineHubs, ...popularLists.flat()]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 90);
+
+  // What there is to rank by: how many saw it, approved it, talked about it.
+  const withStats = await Promise.all(posts.map(async (p) => {
+    const s = await getStats(postRef(p.scope, p.id), null, { comments: true, views: true }).catch(() => ({}));
+    return { ...p, views: s.views ?? 0, approvals: s.approvals ?? 0, commentCount: s.comments ?? 0 };
+  }));
+
   return {
-    posts: lists.flat().sort((a, b) => b.at - a.at),
-    discover: discover.filter((h) => !pledged.includes(h.id)).slice(0, 5),
+    posts: withStats,
+    discover: publicHubs.filter((h) => !pledged.includes(h.id)).slice(0, 5),
     buddies,
-    hubs,
+    hubs: [...hubs, ...popular],
   };
 }
 
