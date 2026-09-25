@@ -167,6 +167,9 @@ export async function createHub({ id, name, tagline, tag, color, visibility, pos
 }
 
 export async function pledge(hubId, me) {
+  // Already pledged (the list of your Hubs may not have caught up): done.
+  const mine = await getDoc(doc(db, 'hubs', hubId, 'members', me.uid)).catch(() => null);
+  if (mine?.exists()) return;
   const roles = await getDocs(query(collection(db, 'hubs', hubId, 'roles'), where('level', '==', 'member'), limit(1)));
   if (roles.empty) throw new Error('This Hub has no member role to pledge into.');
   await setDoc(doc(db, 'hubs', hubId, 'members', me.uid), {
@@ -183,7 +186,10 @@ export function watchMyPledges(uid, onChange) {
   return onSnapshot(
     query(collectionGroup(db, 'members'), where('uid', '==', uid)),
     (snap) => onChange(snap.docs.map((d) => d.ref.parent.parent.id)),
-    () => onChange([]),
+    // Most often the index this needs isn't deployed yet (firestore.indexes.json
+    // in the app's repo, deployed by `npm run deploy:rules`). Say so where it
+    // can be seen, and keep what's known.
+    (error) => console.error("Mimyne couldn't list the Hubs you pledged to:", error),
   );
 }
 
@@ -296,7 +302,10 @@ export async function getFeed() {
   if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
   const uid = user.uid;
   const [pledgedSnap, buddies, stalking] = await Promise.all([
-    getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).catch(() => ({ docs: [] })),
+    getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).catch((error) => {
+      console.error("Mimyne couldn't list the Hubs you pledged to:", error);
+      return { docs: [] };
+    }),
     getBuddies(uid).catch(() => []),
     listStalking(uid).catch(() => []),
   ]);

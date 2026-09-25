@@ -59,7 +59,7 @@ export default function Hub() {
         </div>
         <div className="hub__actions">
           <Button icon="share" iconOnly aria-label="Share this Hub" onClick={() => setSharing(true)} />
-          <PledgeButton hub={hub} />
+          <PledgeButton hub={hub} pledgedHere={access.isPledged} />
         </div>
       </div>
 
