@@ -1,14 +1,48 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
 import Button from './Button.jsx';
-import { downloadFile } from '../lib/files.js';
+import { downloadFile, fileLink } from '../lib/files.js';
 import { formatBytes, FREE_FILE_LIMIT, PAID_TIER_NAME } from '../lib/format.js';
 import './FileCard.css';
 
 const kindOf = (file) => (file.type?.startsWith('video/') ? 'video' : file.type?.startsWith('image/') ? 'image' : 'file');
 
+// Pictures, GIFs and videos show in place once you're signed in (their links
+// need an account, like downloads), with the card under them.
+function Media({ file, kind }) {
+  const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fileLink(file.path).then((link) => live && setUrl(link)).catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [file.path]);
+  if (failed) return null;
+  if (!url) return <span className="file-media file-media--loading" aria-hidden="true" />;
+  return kind === 'video' ? (
+    <video className="file-media" src={url} controls preload="metadata" />
+  ) : (
+    <img className="file-media" src={url} alt={file.name} loading="lazy" onError={() => setFailed(true)} />
+  );
+}
+
 // Any file, any size. Signed-out visitors see it but can't download it.
 export function FileCard({ file, locked = false, compact = false, onNeedAccount }) {
+  const kind = kindOf(file);
+  if (!locked && kind !== 'file') {
+    return (
+      <div className={`file-shown ${compact ? 'file-shown--compact' : ''}`}>
+        <Media file={file} kind={kind} />
+        <Card file={file} compact onNeedAccount={onNeedAccount} />
+      </div>
+    );
+  }
+  return <Card file={file} locked={locked} compact={compact} onNeedAccount={onNeedAccount} />;
+}
+
+function Card({ file, locked = false, compact = false, onNeedAccount }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 

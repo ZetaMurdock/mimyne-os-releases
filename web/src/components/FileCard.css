@@ -92,3 +92,33 @@ button.file-card__locked:hover {
   background: var(--accent);
   transition: width var(--d-press) linear;
 }
+
+.file-shown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.file-shown--compact {
+  max-width: 340px;
+}
+
+.file-media {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: var(--r-input);
+  background: var(--surface-2);
+}
+
+.file-shown--compact .file-media {
+  max-height: 320px;
+}
+
+.file-media--loading {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 240px;
+}

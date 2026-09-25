@@ -77,6 +77,17 @@ export async function uploadFile(file, onProgress = () => {}) {
 
 /** Starts downloading a file through a link that works for ten minutes. */
 export async function downloadFile(path) {
-  const { url } = await callJson('/downloads', { path });
-  window.location.assign(url);
+  window.location.assign(await fileLink(path));
+}
+
+// Links last 10 minutes; each is reused for 8, so a page of pictures asks
+// once per file rather than on every render.
+const links = new Map();
+export function fileLink(path) {
+  const held = links.get(path);
+  if (held && held.until > Date.now()) return held.url;
+  const url = callJson('/downloads', { path }).then((data) => data.url);
+  links.set(path, { url, until: Date.now() + 8 * 60 * 1000 });
+  url.catch(() => links.delete(path));
+  return url;
 }
