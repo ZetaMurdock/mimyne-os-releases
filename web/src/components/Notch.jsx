@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate, useNavigation } from 'react-ro
 import { Avatar, HubIcon } from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import Menu, { MenuItem } from './Menu.jsx';
-import { findHub, getHubsById, hasUnread } from '../data/api.js';
+import { getHubCard, getHubCards } from '../data/api.js';
 import { useSession } from '../data/session.jsx';
 import './Notch.css';
 
@@ -85,18 +85,32 @@ function Notch() {
   const bar = useRef(null);
   const title = useRef(null);
   const [query, setQuery] = useState('');
+  const [missing, setMissing] = useState(false);
+  const [hubs, setHubs] = useState([]);
   useSquashGeometry(bar, title);
 
   const { pathname, search } = useLocation();
   const onBuddies = pathname === '/feed' && new URLSearchParams(search).get('f') === 'buddies';
-  const hubs = getHubsById([...pledged]);
+  const pledgedKey = [...pledged].sort().join(',');
 
-  function findAndOpen(event) {
+  useEffect(() => {
+    let live = true;
+    getHubCards(pledgedKey ? pledgedKey.split(',') : []).then((cards) => live && setHubs(cards));
+    return () => {
+      live = false;
+    };
+  }, [pledgedKey]);
+
+  // A Hub is found by its address: "Ashfall Crew" looks for /h/ashfall-crew.
+  async function findAndOpen(event) {
     event.preventDefault();
-    const hub = findHub(query);
+    const id = query.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const hub = id && (await getHubCard(id));
     if (hub) {
       navigate(`/h/${hub.id}`);
       setQuery('');
+    } else {
+      setMissing(true);
     }
   }
 
@@ -111,7 +125,16 @@ function Notch() {
       <div className="notch__rest">
         <form className="notch__search" role="search" onSubmit={findAndOpen}>
           <Icon name="search" size={16} strokeWidth={2} />
-          <input type="search" placeholder="Search Hubs" aria-label="Search Hubs" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input
+            type="search"
+            placeholder={missing ? 'No Hub at that address' : 'Find a Hub'}
+            aria-label="Find a Hub by its address"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setMissing(false);
+            }}
+          />
         </form>
 
         <span className="notch__divider" />
@@ -122,7 +145,7 @@ function Notch() {
               <HubIcon hub={hub} size={32} />
             </NavLink>
           ))}
-          <Link to="/feed#find-hubs" className="notch__add" aria-label="Find a Hub to pledge to" title="Find a Hub">
+          <Link to="/hubs/new" className="notch__add" aria-label="Start a Hub" title="Start a Hub">
             <Icon name="plus" size={14} strokeWidth={2.2} />
           </Link>
         </div>
@@ -141,7 +164,6 @@ function Notch() {
         </Menu>
         <NavLink to="/messages" className="notch__icon" aria-label="Messages">
           <Icon name="message" size={18} />
-          {hasUnread() && <span className="notch__dot" />}
         </NavLink>
         <Link to="/feed" className={`notch__link ${pathname === '/feed' && !onBuddies ? 'active' : ''}`}>
           Feed
@@ -156,11 +178,12 @@ function Notch() {
           label="Your account"
           trigger={({ toggle, ...aria }) => (
             <button type="button" className="notch__me" onClick={toggle} {...aria}>
-              <Avatar user={user} size={30} ring="var(--border)" />
+              <Avatar person={user} size={30} ring="var(--border)" />
               <span className="notch__name">{user.name}</span>
             </button>
           )}
         >
+          <MenuItem as={Link} to="/hubs/new">Start a Hub</MenuItem>
           <MenuItem onClick={signOut}>Sign out</MenuItem>
         </Menu>
         <Menu

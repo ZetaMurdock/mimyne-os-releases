@@ -21,13 +21,6 @@ export function timeAgo(time) {
   return new Date(time).toLocaleDateString();
 }
 
-export function fileKind(file) {
-  const type = file.type || '';
-  if (type.startsWith('image/')) return 'image';
-  if (type.startsWith('video/')) return 'video';
-  return 'file';
-}
-
 // Files above this size need the paid tier. The limit and the tier's name are
 // placeholders until pricing is decided.
 export const FREE_FILE_LIMIT = 2 * 1024 ** 3;

@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useLoaderData } from 'react-router-dom';
-import { Avatar, HubIcon } from '../components/Avatar.jsx';
+import { HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
 import Composer from '../components/Composer.jsx';
 import Icon from '../components/Icon.jsx';
 import PledgeButton from '../components/PledgeButton.jsx';
 import PostCard from '../components/PostCard.jsx';
 import RoleChip from '../components/RoleChip.jsx';
-import RoomTile from '../components/RoomTile.jsx';
-import { createPost, getHub, getUser } from '../data/api.js';
+import { Avatar } from '../components/Avatar.jsx';
+import { createPost, getHub } from '../data/api.js';
+import { usePerson } from '../data/people.js';
 import { useHubAccess, useSession } from '../data/session.jsx';
 import './Hub.css';
 
@@ -17,39 +18,30 @@ export function hubLoader({ params }) {
 }
 
 const TABS = [
-  { id: 'rooms', label: 'Rooms' },
   { id: 'board', label: 'Board' },
   { id: 'pledged', label: 'Pledged' },
   { id: 'rules', label: 'Rules' },
 ];
 
+const LEVEL_LABEL = { owner: 'Runs the Hub', mod: 'Keeps it tidy', member: 'Pledged' };
+
 export default function Hub() {
-  const { hub, rooms, posts: loadedPosts } = useLoaderData();
+  const { hub, roles, members, posts: loadedPosts } = useLoaderData();
   const { user, signIn } = useSession();
-  const access = useHubAccess(hub);
-  const [tab, setTab] = useState('rooms');
+  const access = useHubAccess(hub, members);
+  const [tab, setTab] = useState('board');
   const [posts, setPosts] = useState(loadedPosts);
 
-  const level = access.role?.level ?? (access.isPledged ? 'member' : null);
-  const members = Object.entries(hub.members).map(([id, roleId]) => ({
-    user: getUser(id),
-    role: hub.roles.find((r) => r.id === roleId),
-  }));
-  const hereNow = [...new Set(rooms.flatMap((r) => (r.levels ? [] : r.here)))].map((id) => ({
-    user: getUser(id),
-    room: rooms.find((r) => r.here.includes(id)),
-  }));
+  const roleOf = (uid) => roles.find((r) => r.id === members.find((m) => m.uid === uid)?.role) ?? null;
 
   async function post({ text, files }) {
-    const created = await createPost({ author: user.id, hub: hub.id, body: text, files });
+    const created = await createPost({ hubId: hub.id }, { me: user, body: text, files });
     setPosts((prev) => [created, ...prev]);
   }
 
   return (
     <div className={`hub ${user ? 'hub--under-notch' : ''}`}>
-      <div className="hub__banner placeholder" style={{ background: hub.banner }}>
-        [Hub banner]
-      </div>
+      <div className="hub__banner" style={{ background: `${hub.color}2e` }} />
 
       <div className="hub__identity">
         <span className="hub__icon">
@@ -58,8 +50,9 @@ export default function Hub() {
         <div className="hub__names">
           <h1 className="hub__name">{hub.name}</h1>
           <p className="hub__meta">
-            {hub.tagline} · <span className="hub__tag">#{hub.tag}</span> · {members.length} pledged
-            {hereNow.length > 0 && <span className="hub__live"> · ● {hereNow.length} here now</span>} · Public
+            {[hub.tagline, hub.tag && `#${hub.tag}`, `${members.length} pledged`, hub.visibility === 'public' ? 'Public' : 'Private']
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         </div>
         <div className="hub__actions">
@@ -103,21 +96,6 @@ export default function Hub() {
           </div>
 
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="hub__panel">
-            {tab === 'rooms' && (
-              <div className="hub__rooms">
-                {rooms.map((room) => (
-                  <RoomTile key={room.id} room={room} currentHub={hub.id} signedIn={!!user} level={level} />
-                ))}
-                {access.canModerate && (
-                  <button type="button" className="hub__add-room">
-                    <Icon name="plus" size={20} />
-                    Add a workspace as a room
-                    <span>It can stay in your other Hubs too</span>
-                  </button>
-                )}
-              </div>
-            )}
-
             {tab === 'board' && (
               <div className="hub__board">
                 {!user ? (
@@ -127,21 +105,17 @@ export default function Hub() {
                 ) : (
                   <Composer placeholder={`Post to ${hub.name}`} onSubmit={post} />
                 )}
-                {posts.length === 0 && <p className="muted">No posts yet.</p>}
+                {posts.length === 0 && <p className="muted hub__empty">Nothing on the Board yet.</p>}
                 {posts.map((p) => (
-                  <PostCard key={p.id} post={p} showHub={false} />
+                  <PostCard key={p.id} post={p} hub={hub} showHub={false} roleOf={roleOf} canModerate={access.canModerate} />
                 ))}
               </div>
             )}
 
             {tab === 'pledged' && (
               <ul className="hub__members">
-                {members.map(({ user: m, role }) => (
-                  <li key={m.id} className="person">
-                    <Avatar user={m} size={36} />
-                    <span className="person__name">{m.name}</span>
-                    <RoleChip role={role} />
-                  </li>
+                {members.map((m) => (
+                  <Member key={m.uid} member={m} role={roleOf(m.uid)} />
                 ))}
               </ul>
             )}
@@ -151,33 +125,19 @@ export default function Hub() {
         </div>
 
         <aside className="hub__side">
-          {hereNow.length > 0 && (
-            <section className="hub__side-block">
-              <h2 className="label">Here now</h2>
-              {hereNow.map(({ user: u, room }) => (
-                <div key={u.id} className="person">
-                  <Avatar user={u} size={32} />
-                  <span className="person__text">
-                    <span className="person__name">{u.name}</span>
-                    <span className="person__status">In {room.name}</span>
-                  </span>
-                </div>
-              ))}
-            </section>
-          )}
           <section className="card side-card">
             <h2 className="side-card__title">House rules</h2>
             <Rules hub={hub} short />
           </section>
           <section className="card side-card">
             <h2 className="side-card__title">Roles</h2>
-            {hub.roles.map((role) => (
+            {roles.map((role) => (
               <div key={role.id} className="hub__role">
                 <RoleChip role={role} />
                 <span className="muted">{LEVEL_LABEL[role.level]}</span>
               </div>
             ))}
-            <p className="hub__role-note">Names and colors are this Hub's own.</p>
+            <p className="hub__role-note">Names and colours are this Hub's own.</p>
           </section>
         </aside>
       </div>
@@ -185,27 +145,28 @@ export default function Hub() {
   );
 }
 
-const LEVEL_LABEL = { owner: 'Runs the Hub', mod: 'Keeps it tidy', member: 'Pledged' };
+function Member({ member, role }) {
+  const person = usePerson(member.uid, member.name);
+  return (
+    <li className="person">
+      <Avatar person={person} size={36} />
+      <span className="person__name">{person.name}</span>
+      <RoleChip role={role} />
+    </li>
+  );
+}
 
 function Rules({ hub, short = false }) {
   return (
     <div className="hub__rules">
       <p className="muted">
         <a href="/guidelines.html">Mimyne's Community Guidelines</a>
-        {hub.rules.length ? ', plus this Hub’s own:' : ' apply here.'}
+        {hub.rules ? ', plus this Hub’s own:' : ' apply here.'}
       </p>
-      {hub.rules.length > 0 && (
-        <ol>
-          {hub.rules.map((r) => (
-            <li key={r}>{r}</li>
-          ))}
-        </ol>
-      )}
+      {hub.rules && <p className="hub__rules-text">{short && hub.rules.length > 400 ? `${hub.rules.slice(0, 400)}…` : hub.rules}</p>}
       {!short && (
         <p className="muted">
-          {hub.postingPolicy === 'pledged'
-            ? 'Only people who pledged can post on the Board.'
-            : 'Anyone signed in can post on the Board.'}
+          {hub.postingPolicy === 'pledged' ? 'Only people who pledged can post on the Board.' : 'Anyone signed in can post on the Board.'}
         </p>
       )}
     </div>

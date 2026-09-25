@@ -1,4 +1,4 @@
-// Hubs, the feed, posts and messages run on sample data until the site is
-// connected to Mimyne's Firebase. They're on while developing and off in
-// the published site; build with VITE_SOCIAL=true to include them.
+// Sign-in, Hubs, the feed, posts and messages. On while developing; the
+// published site includes them when it's built with VITE_SOCIAL=true (set in
+// .github/workflows/pages.yml).
 export const SOCIAL = import.meta.env.DEV || import.meta.env.VITE_SOCIAL === 'true';

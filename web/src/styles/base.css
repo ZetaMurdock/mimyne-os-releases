@@ -104,3 +104,17 @@ img {
     transition-duration: 1ms !important;
   }
 }
+
+.link-button {
+  align-self: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}

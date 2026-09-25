@@ -21,9 +21,32 @@
 }
 
 .inbox__heading {
-  padding: 18px 10px 12px;
+  display: flex;
+  align-items: center;
+  padding: 14px 4px 10px 10px;
+}
+
+.inbox__heading h1 {
+  flex-grow: 1;
   font-size: var(--t-heading);
   font-weight: 700;
+}
+
+.inbox__none {
+  padding: var(--s-4) 10px;
+  font-size: 13px;
+}
+
+.inbox__blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: span 2;
+}
+
+.inbox__head-sub {
+  color: var(--text-3);
+  font-size: var(--t-caption);
 }
 
 .inbox__row {

@@ -23,3 +23,16 @@
   font-weight: 800;
   line-height: 1;
 }
+
+img.avatar {
+  object-fit: cover;
+}
+
+.avatar--letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #050505;
+  font-weight: 700;
+  line-height: 1;
+}

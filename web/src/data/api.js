@@ -1,127 +1,380 @@
-// The one place pages get data from. Today it reads sample data; the same
-// functions will call Mimyne's Firebase later, so pages don't change.
-import * as mock from './mock.js';
+// Everything the site reads and writes, against the same Firestore as the
+// app. The rules in the app's repo (firestore.rules, "hubs" and "messages")
+// decide who may do what; this file only asks.
+import {
+  addDoc, collection, collectionGroup, deleteDoc, doc, getCountFromServer, getDoc, getDocs,
+  limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
+  writeBatch,
+} from 'firebase/firestore';
+import { auth, authReady, db } from '../lib/firebase.js';
 
-// Sample reads take a moment, like a real request would, so page changes
-// and the notch's transition behave the way they will against Firebase.
-const wait = (ms = 280) => new Promise((resolve) => setTimeout(resolve, ms));
+// ------------------------------------------------------------------ shapes
+
+const text = (value, max = 200) => (typeof value === 'string' ? value.slice(0, max) : '');
+const millis = (value) => (typeof value?.toMillis === 'function' ? value.toMillis() : Date.now());
+const hex = (value, fallback) => (typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : fallback);
+
+export const HUB_COLORS = ['#7C3AED', '#2563EB', '#0F766E', '#B45309', '#BE185D', '#3F3F46'];
+
+function cleanHub(id, data) {
+  if (!data) return null;
+  return {
+    id,
+    name: text(data.name, 60) || id,
+    tagline: text(data.tagline, 140),
+    tag: text(data.tag, 30),
+    color: hex(data.color, '#3F3F46'),
+    visibility: data.visibility === 'private' ? 'private' : 'public',
+    postingPolicy: data.postingPolicy === 'pledged' ? 'pledged' : 'signed-in',
+    rules: text(data.rules, 3000),
+    ownerId: text(data.ownerId, 128),
+  };
+}
+
+function cleanFiles(files) {
+  return (Array.isArray(files) ? files : [])
+    .filter((f) => f && typeof f.path === 'string' && typeof f.name === 'string')
+    .map((f) => ({ name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path }));
+}
+
+function cleanPost(scope, id, data) {
+  return {
+    id,
+    scope,
+    authorUid: text(data.authorUid, 128),
+    authorName: text(data.authorName, 20),
+    title: text(data.title, 300),
+    body: text(data.body, 40000),
+    files: cleanFiles(data.files),
+    embedHubId: text(data.embedHubId, 32) || null,
+    at: millis(data.createdAt),
+    edited: !!data.editedAt,
+  };
+}
+
+function cleanComment(id, data) {
+  return {
+    id,
+    authorUid: text(data.authorUid, 128),
+    authorName: text(data.authorName, 20),
+    text: text(data.text, 10000),
+    parentId: text(data.parentId, 128) || null,
+    files: cleanFiles(data.files),
+    at: millis(data.createdAt),
+    replies: [],
+  };
+}
+
+function withoutEmpty(data) {
+  return Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)));
+}
 
 function notFound() {
   throw new Response('Not found', { status: 404 });
 }
 
-export async function getHub(id) {
-  await wait();
-  const hub = mock.hubs[id];
-  if (!hub) notFound();
-  return {
-    hub,
-    rooms: mock.rooms.filter((r) => r.hubs.includes(id)),
-    posts: mock.posts.filter((p) => p.hub === id),
-  };
-}
-
-export function getHubsById(ids) {
-  return ids.map((id) => mock.hubs[id]).filter(Boolean);
-}
-
-export function getHubSync(id) {
-  return mock.hubs[id] ?? null;
-}
-
-export function getUser(id) {
-  return mock.users[id] ?? { id, name: id, color: '#333336' };
-}
-
-export async function getFeed() {
-  await wait();
-  return {
-    posts: [...mock.posts].sort((a, b) => b.at - a.at),
-    discover: getHubsById(mock.discover),
-  };
-}
-
-export async function getPost(id) {
-  await wait();
-  const post = mock.posts.find((p) => p.id === id);
-  if (!post) notFound();
-  return { post, comments: getComments(id) };
-}
-
-// A copy, so a page can hold it in state and swap it after a change.
-export function getComments(postId) {
-  return structuredClone(mock.comments[postId] ?? []);
-}
-
-export function getPostSync(id) {
-  return mock.posts.find((p) => p.id === id) ?? null;
-}
-
-export function getRoom(id) {
-  return mock.rooms.find((r) => r.id === id) ?? null;
-}
-
-export async function getConversations() {
-  await wait();
-  return [...mock.conversations].sort((a, b) => b.at - a.at);
-}
-
-let nextId = 1;
-
-export async function createPost({ author, hub, title, body, files }) {
-  await wait(150);
-  const post = {
-    id: `local-${nextId++}`,
-    author,
-    hub: hub || null,
-    at: Date.now(),
-    title: title || undefined,
-    body: body || undefined,
-    files,
-    approvals: 0,
-    comments: 0,
-  };
-  mock.posts.unshift(post);
-  return post;
-}
-
-export async function addComment(postId, parentId, { author, body, files }) {
-  await wait(120);
-  const comment = { id: `local-${nextId++}`, author, at: Date.now(), approvals: 0, body, files, replies: [] };
-  const list = (mock.comments[postId] ??= []);
-  if (!parentId) {
-    list.push(comment);
-  } else {
-    const parent = findComment(list, parentId);
-    if (parent) parent.replies.push(comment);
+// A read the rules refuse (a private Hub, a profile that isn't shared with
+// you) looks the same to a visitor as one that doesn't exist.
+async function readOrMissing(ref) {
+  try {
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap : null;
+  } catch (error) {
+    if (error?.code === 'permission-denied') return null;
+    throw error;
   }
-  return comment;
 }
 
-function findComment(list, id) {
-  for (const c of list) {
-    if (c.id === id) return c;
-    const hit = findComment(c.replies, id);
-    if (hit) return hit;
+// --------------------------------------------------------------- where
+
+/** A post lives on a Hub's Board or on someone's profile. */
+export const postsOf = (scope) =>
+  scope.hubId ? collection(db, 'hubs', scope.hubId, 'posts') : collection(db, 'profile_pages', scope.profileUid, 'posts');
+export const postRef = (scope, id) => doc(postsOf(scope), id);
+export const postUrl = (post) =>
+  post.scope.hubId ? `/h/${post.scope.hubId}/p/${post.id}` : `/people/${post.scope.profileUid}/p/${post.id}`;
+
+// ------------------------------------------------------------------- hubs
+
+export function hubAddressProblem(id) {
+  if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(id)) {
+    return 'Use 3 to 32 lowercase letters, numbers and dashes, starting and ending with a letter or number.';
   }
   return null;
 }
 
-export async function sendMessage(conversationId, { from, text, files }) {
-  await wait(120);
-  const convo = mock.conversations.find((c) => c.id === conversationId);
-  const message = { id: `local-${nextId++}`, from, at: Date.now(), text: text || undefined, files };
-  convo.messages.push(message);
-  convo.at = message.at;
-  return message;
+export async function getHub(hubId) {
+  await authReady;
+  const snap = await readOrMissing(doc(db, 'hubs', hubId));
+  if (!snap) notFound();
+  const hub = cleanHub(hubId, snap.data());
+  const [roles, members, posts] = await Promise.all([
+    getDocs(collection(db, 'hubs', hubId, 'roles')),
+    getDocs(query(collection(db, 'hubs', hubId, 'members'), limit(500))),
+    listPosts({ hubId }, 30),
+  ]);
+  return {
+    hub,
+    roles: roles.docs
+      .map((d) => ({ id: d.id, name: text(d.data().name, 24), color: hex(d.data().color, '#F4F4F5'), level: d.data().level, order: d.data().order ?? 0 }))
+      .sort((a, b) => a.order - b.order),
+    members: members.docs.map((d) => ({ uid: d.id, name: text(d.data().name, 20), role: text(d.data().role, 40), level: d.data().level })),
+    posts,
+  };
 }
 
-export function findHub(query) {
-  const q = query.trim().toLowerCase();
-  if (!q) return null;
-  return Object.values(mock.hubs).find((h) => h.name.toLowerCase().includes(q) || h.tag === q) ?? null;
+export async function getHubCard(hubId) {
+  const snap = await readOrMissing(doc(db, 'hubs', hubId));
+  return snap ? cleanHub(hubId, snap.data()) : null;
 }
 
-export function hasUnread() {
-  return mock.conversations.some((c) => c.unread);
+export async function getHubCards(ids) {
+  return (await Promise.all(ids.map(getHubCard))).filter(Boolean);
+}
+
+export async function discoverHubs(count = 12) {
+  const snap = await getDocs(query(collection(db, 'hubs'), where('visibility', '==', 'public'), limit(count)));
+  return snap.docs.map((d) => cleanHub(d.id, d.data()));
+}
+
+/**
+ * A new Hub, in the one batch the rules ask for: the Hub, its first roles,
+ * and its owner's own pledge.
+ */
+export async function createHub({ id, name, tagline, tag, color, visibility, postingPolicy, rules }, me) {
+  const problem = hubAddressProblem(id);
+  if (problem) throw new Error(problem);
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'hubs', id), withoutEmpty({
+    name: name.trim(), tagline: tagline?.trim(), tag: tag?.trim(), color, visibility, postingPolicy,
+    rules: rules?.trim(), ownerId: me.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  batch.set(doc(db, 'hubs', id, 'roles', 'owner'), { name: 'Owner', color: '#F2B84B', level: 'owner', order: 0 });
+  batch.set(doc(db, 'hubs', id, 'roles', 'mod'), { name: 'Mod', color: '#C4B5FD', level: 'mod', order: 1 });
+  batch.set(doc(db, 'hubs', id, 'roles', 'member'), { name: 'Member', color: '#F4F4F5', level: 'member', order: 2 });
+  batch.set(doc(db, 'hubs', id, 'members', me.uid), { role: 'owner', level: 'owner', uid: me.uid, name: me.username, joinedAt: serverTimestamp() });
+  try {
+    await batch.commit();
+  } catch (error) {
+    if (error?.code === 'permission-denied') throw new Error('That address is taken. Try another.');
+    throw error;
+  }
+  return id;
+}
+
+export async function pledge(hubId, me) {
+  const roles = await getDocs(query(collection(db, 'hubs', hubId, 'roles'), where('level', '==', 'member'), limit(1)));
+  if (roles.empty) throw new Error('This Hub has no member role to pledge into.');
+  await setDoc(doc(db, 'hubs', hubId, 'members', me.uid), {
+    role: roles.docs[0].id, level: 'member', uid: me.uid, name: me.username, joinedAt: serverTimestamp(),
+  });
+}
+
+export function unpledge(hubId, uid) {
+  return deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
+}
+
+/** The ids of every Hub this person pledged to, live. */
+export function watchMyPledges(uid, onChange) {
+  return onSnapshot(
+    query(collectionGroup(db, 'members'), where('uid', '==', uid)),
+    (snap) => onChange(snap.docs.map((d) => d.ref.parent.parent.id)),
+    () => onChange([]),
+  );
+}
+
+/** A Hub's roles and who holds them, for role chips beside names. */
+export async function getHubPeople(hubId) {
+  const [roles, members] = await Promise.all([
+    getDocs(collection(db, 'hubs', hubId, 'roles')),
+    getDocs(query(collection(db, 'hubs', hubId, 'members'), limit(500))),
+  ]);
+  return {
+    roles: roles.docs.map((d) => ({ id: d.id, name: text(d.data().name, 24), color: hex(d.data().color, '#F4F4F5'), level: d.data().level })),
+    members: members.docs.map((d) => ({ uid: d.id, name: text(d.data().name, 20), role: text(d.data().role, 40), level: d.data().level })),
+  };
+}
+
+// ------------------------------------------------------------------ posts
+
+export async function listPosts(scope, count = 20) {
+  try {
+    const snap = await getDocs(query(postsOf(scope), orderBy('createdAt', 'desc'), limit(count)));
+    return snap.docs.map((d) => cleanPost(scope, d.id, d.data()));
+  } catch (error) {
+    if (error?.code === 'permission-denied') return [];
+    throw error;
+  }
+}
+
+export async function createPost(scope, { me, title, body, files, embedHubId }) {
+  const ref = await addDoc(postsOf(scope), withoutEmpty({
+    authorUid: me.uid, authorName: me.username, title: title?.trim(), body: body?.trim(), files, embedHubId,
+    createdAt: serverTimestamp(),
+  }));
+  return cleanPost(scope, ref.id, { authorUid: me.uid, authorName: me.username, title, body, files, embedHubId });
+}
+
+export function deletePost(post) {
+  return deleteDoc(postRef(post.scope, post.id));
+}
+
+export async function getPost(scope, postId) {
+  await authReady;
+  const snap = await readOrMissing(postRef(scope, postId));
+  if (!snap) notFound();
+  const [comments, hub] = await Promise.all([
+    listComments(scope, postId),
+    scope.hubId ? getHubCard(scope.hubId) : null,
+  ]);
+  return { post: cleanPost(scope, snap.id, snap.data()), comments, hub };
+}
+
+// ------------------------------------------------------------- comments
+
+/** A post's comments as a tree: replies under the comment they answer. */
+export async function listComments(scope, postId) {
+  const snap = await getDocs(query(collection(postRef(scope, postId), 'comments'), orderBy('createdAt', 'asc'), limit(500)));
+  const all = snap.docs.map((d) => cleanComment(d.id, d.data()));
+  const byId = new Map(all.map((c) => [c.id, c]));
+  const top = [];
+  for (const c of all) {
+    const parent = c.parentId && byId.get(c.parentId);
+    (parent ? parent.replies : top).push(c);
+  }
+  return top;
+}
+
+export function addComment(scope, postId, { me, text: words, parentId, files }) {
+  return addDoc(collection(postRef(scope, postId), 'comments'), withoutEmpty({
+    authorUid: me.uid, authorName: me.username, text: words?.trim(), parentId, files, createdAt: serverTimestamp(),
+  }));
+}
+
+export function deleteComment(scope, postId, commentId) {
+  return deleteDoc(doc(postRef(scope, postId), 'comments', commentId));
+}
+
+// ------------------------------------------------------------ approvals
+
+/** Approvals, the viewer's own vote, and how many comments, for a post or comment. */
+export async function getStats(ref, uid, { comments = false } = {}) {
+  const likes = collection(ref, 'likes');
+  const [approvals, mine, commentCount] = await Promise.all([
+    getCountFromServer(query(likes, where('vote', '==', 'up'))).then((s) => s.data().count).catch(() => 0),
+    uid ? getDoc(doc(likes, uid)).then((s) => (s.exists() ? s.data().vote ?? 'up' : null)).catch(() => null) : null,
+    comments ? getCountFromServer(collection(ref, 'comments')).then((s) => s.data().count).catch(() => 0) : null,
+  ]);
+  return { approvals, mine, comments: commentCount };
+}
+
+/** 'up', 'down', or null to take a vote back. */
+export function vote(ref, uid, value) {
+  const mine = doc(collection(ref, 'likes'), uid);
+  return value ? setDoc(mine, { vote: value, createdAt: serverTimestamp() }) : deleteDoc(mine);
+}
+
+// ----------------------------------------------------------------- feed
+
+export async function getBuddies(uid) {
+  const snap = await getDocs(query(collection(db, 'friendships'), where('users', 'array-contains', uid)));
+  return snap.docs.map((d) => (d.data().users ?? []).find((u) => u !== uid)).filter(Boolean);
+}
+
+/** Recent posts from the Hubs someone pledged to, their Buddies and themself. */
+export async function getFeed() {
+  const user = await authReady;
+  if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
+  const uid = user.uid;
+  const [pledgedSnap, buddies] = await Promise.all([
+    getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid))).catch(() => ({ docs: [] })),
+    getBuddies(uid).catch(() => []),
+  ]);
+  const pledged = pledgedSnap.docs.map((d) => d.ref.parent.parent.id);
+  const scopes = [
+    ...pledged.map((hubId) => ({ hubId })),
+    ...[uid, ...buddies].map((profileUid) => ({ profileUid })),
+  ];
+  const [lists, discover, hubs] = await Promise.all([
+    Promise.all(scopes.map((s) => listPosts(s, 10))),
+    discoverHubs(12).catch(() => []),
+    getHubCards(pledged),
+  ]);
+  return {
+    posts: lists.flat().sort((a, b) => b.at - a.at),
+    discover: discover.filter((h) => !pledged.includes(h.id)).slice(0, 5),
+    buddies,
+    hubs,
+  };
+}
+
+// ------------------------------------------------------------- messages
+
+function cleanConversation(id, data, uid) {
+  return {
+    id,
+    kind: ['direct', 'group', 'hub'].includes(data.kind) ? data.kind : 'group',
+    members: Array.isArray(data.members) ? data.members.filter((m) => typeof m === 'string') : [],
+    title: text(data.title, 80),
+    hubId: text(data.hubId, 32) || null,
+    lastText: text(data.lastText, 200),
+    lastFrom: text(data.lastFrom, 128),
+    at: millis(data.lastAt ?? data.createdAt),
+    other: data.kind === 'direct' ? (data.members ?? []).find((m) => m !== uid) : null,
+  };
+}
+
+export function watchConversations(uid, onChange, onError) {
+  return onSnapshot(
+    query(collection(db, 'conversations'), where('members', 'array-contains', uid)),
+    (snap) => onChange(snap.docs.map((d) => cleanConversation(d.id, d.data(), uid)).sort((a, b) => b.at - a.at)),
+    onError,
+  );
+}
+
+export function watchMessages(convoId, onChange, onError) {
+  return onSnapshot(
+    query(collection(db, 'conversations', convoId, 'messages'), orderBy('createdAt', 'asc'), limitToLast(300)),
+    (snap) => onChange(snap.docs.map((d) => {
+      const m = d.data();
+      return {
+        id: d.id,
+        from: text(m.from, 128),
+        text: text(m.text, 4000),
+        files: cleanFiles(m.files),
+        post: m.post && typeof m.post.postId === 'string' ? m.post : null,
+        at: millis(m.createdAt),
+      };
+    })),
+    onError,
+  );
+}
+
+export async function sendMessage(convoId, uid, { text: words, files }) {
+  await addDoc(collection(db, 'conversations', convoId, 'messages'), withoutEmpty({
+    from: uid, text: words?.trim(), files, createdAt: serverTimestamp(),
+  }));
+  const preview = words?.trim() || (files?.length ? `Sent ${files.length === 1 ? files[0].name : `${files.length} files`}` : '');
+  await updateDoc(doc(db, 'conversations', convoId), { lastAt: serverTimestamp(), lastFrom: uid, lastText: preview.slice(0, 200) });
+}
+
+/** The one conversation two people have, made the first time it's needed. */
+export async function openDirect(uid, otherUid) {
+  if (otherUid === uid) throw new Error("That's you.");
+  const members = [uid, otherUid].sort();
+  const id = members.join('__');
+  const existing = await readOrMissing(doc(db, 'conversations', id));
+  if (!existing) {
+    try {
+      await setDoc(doc(db, 'conversations', id), { kind: 'direct', members, createdBy: uid, createdAt: serverTimestamp() });
+    } catch (error) {
+      if (error?.code === 'permission-denied') throw new Error("You can't message this person.");
+      throw error;
+    }
+  }
+  return id;
+}
+
+export function currentUid() {
+  return auth.currentUser?.uid ?? null;
 }

@@ -61,3 +61,34 @@
   color: var(--text-3);
   white-space: nowrap;
 }
+
+.file-card__error {
+  font-size: var(--t-caption);
+  color: #fca5a5;
+}
+
+button.file-card__locked {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+button.file-card__locked:hover {
+  color: var(--text);
+}
+
+.file-card__bar {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.file-card__bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--d-press) linear;
+}

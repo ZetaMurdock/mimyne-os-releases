@@ -119,3 +119,12 @@
   --btn-border: transparent;
   font-weight: 500;
 }
+
+.post__time {
+  color: inherit;
+}
+
+.post__time:hover {
+  color: var(--text);
+  text-decoration: underline;
+}

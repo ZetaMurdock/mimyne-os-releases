@@ -1,78 +1,115 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { SOCIAL } from '../lib/features.js';
 
-// Who is signed in and which Hubs they pledged to. For now sign-in is a
-// stand-in that signs you in as the sample account; Firebase Auth replaces it.
+// Who is signed in, their public card, and which Hubs they pledged to.
+// Firebase is loaded only where the social side is on, so the home page of
+// the published site stays light.
 const SessionContext = createContext(null);
-const STORAGE_KEY = 'mimyne.session';
-const DEFAULT_PLEDGES = ['ashfall', 'pyre', 'wraithline', 'nightshift', 'lowpoly'];
-const SAMPLE_USER = { id: 'zeta', name: 'Zeta Murdock', username: 'zetamurdock', color: '#f4f4f5' };
-
-function load() {
-  if (!SOCIAL) return { userId: null, pledged: [] };
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.userId) return saved;
-  } catch {
-    // Storage can be blocked or hold something unreadable; start signed out.
-  }
-  return { userId: null, pledged: [] };
-}
-
-function save(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Signed-in state just won't survive a reload.
-  }
-}
+const SignInDialog = lazy(() => import('../components/SignInDialog.jsx'));
+const ClaimUsername = lazy(() => import('../components/ClaimUsername.jsx'));
 
 export function SessionProvider({ children }) {
-  const [state, setState] = useState(load);
+  // off: the social side isn't built in. loading: Firebase is restoring a
+  // sign-in. needs-username: signed in, no Mimyne profile yet.
+  const [status, setStatus] = useState(SOCIAL ? 'loading' : 'off');
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [pledged, setPledged] = useState(() => new Set());
+  const [signingIn, setSigningIn] = useState(false);
 
-  const update = useCallback((next) => {
-    setState((prev) => {
-      const value = typeof next === 'function' ? next(prev) : next;
-      save(value);
-      return value;
-    });
+  useEffect(() => {
+    if (!SOCIAL) return undefined;
+    let stopAuth = () => {};
+    let stopProfile = () => {};
+    let stopPledges = () => {};
+    let cancelled = false;
+
+    Promise.all([import('firebase/auth'), import('firebase/firestore'), import('../lib/firebase.js'), import('./identity.js'), import('./api.js')])
+      .then(([{ onAuthStateChanged }, { doc, onSnapshot }, { auth, db }, { cleanProfile }, { watchMyPledges }]) => {
+        if (cancelled) return;
+        stopAuth = onAuthStateChanged(auth, (user) => {
+          stopProfile();
+          stopPledges();
+          setFirebaseUser(user);
+          setPledged(new Set());
+          if (!user) {
+            setProfile(null);
+            setStatus('signed-out');
+            return;
+          }
+          stopProfile = onSnapshot(doc(db, 'profiles', user.uid), (snap) => {
+            const card = snap.exists() ? cleanProfile(user.uid, snap.data()) : null;
+            setProfile(card);
+            setStatus(card ? 'ready' : 'needs-username');
+          }, () => setStatus('needs-username'));
+          stopPledges = watchMyPledges(user.uid, (ids) => setPledged(new Set(ids)));
+        });
+      })
+      .catch(() => setStatus('signed-out'));
+
+    return () => {
+      cancelled = true;
+      stopAuth();
+      stopProfile();
+      stopPledges();
+    };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    const [{ signOut: firebaseSignOut }, { auth }] = await Promise.all([import('firebase/auth'), import('../lib/firebase.js')]);
+    await firebaseSignOut(auth);
   }, []);
 
   const value = useMemo(() => {
-    const user = state.userId ? SAMPLE_USER : null;
-    const pledged = new Set(state.pledged);
+    const user = status === 'ready' && profile
+      ? { uid: profile.uid, username: profile.username, name: profile.displayName || profile.username, picture: profile.picture }
+      : null;
     return {
+      status,
       user,
       pledged,
-      signIn: () => update({ userId: 'zeta', pledged: DEFAULT_PLEDGES }),
-      signOut: () => update({ userId: null, pledged: [] }),
-      pledge: (hubId) => update((s) => ({ ...s, pledged: [...new Set([...s.pledged, hubId])] })),
-      unpledge: (hubId) => update((s) => ({ ...s, pledged: s.pledged.filter((id) => id !== hubId) })),
+      signIn: () => setSigningIn(true),
+      signOut,
+      async pledge(hubId) {
+        const { pledge } = await import('./api.js');
+        await pledge(hubId, user);
+      },
+      async unpledge(hubId) {
+        const { unpledge } = await import('./api.js');
+        await unpledge(hubId, user.uid);
+      },
     };
-  }, [state, update]);
+  }, [status, profile, pledged, signOut]);
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={value}>
+      {children}
+      <Suspense fallback={null}>
+        {signingIn && status !== 'ready' && <SignInDialog onClose={() => setSigningIn(false)} />}
+        {status === 'needs-username' && firebaseUser && (
+          <ClaimUsername firebaseUser={firebaseUser} onDone={() => {}} onSignOut={signOut} />
+        )}
+      </Suspense>
+    </SessionContext.Provider>
+  );
 }
 
 export function useSession() {
   return useContext(SessionContext);
 }
 
-// What the signed-in person may do in a Hub. Levels come from the role the
-// Hub gave them; not pledged means no role.
-export function useHubAccess(hub) {
+/** What the signed-in person may do in a Hub, from its pledges. */
+export function useHubAccess(hub, members = []) {
   const { user, pledged } = useSession();
   if (!hub) return {};
-  const roleId = user ? hub.members[user.id] : null;
-  const role = hub.roles.find((r) => r.id === roleId) ?? null;
-  const isPledged = !!user && (pledged.has(hub.id) || !!role);
-  const canPost = !!user && (hub.postingPolicy === 'signed-in' || isPledged);
+  const mine = user ? members.find((m) => m.uid === user.uid) : null;
+  const level = hub.ownerId === user?.uid ? 'owner' : mine?.level ?? (user && pledged.has(hub.id) ? 'member' : null);
+  const isPledged = !!user && (pledged.has(hub.id) || !!mine || level === 'owner');
   return {
     signedIn: !!user,
     isPledged,
-    role,
-    canPost,
-    canDownload: !!user,
-    canModerate: role?.level === 'owner' || role?.level === 'mod',
+    level,
+    canPost: !!user && (hub.postingPolicy === 'signed-in' || isPledged),
+    canModerate: level === 'owner' || level === 'mod',
   };
 }
