@@ -111,3 +111,43 @@ export async function deleteFile(path) {
     headers: { authorization: `Bearer ${await auth.currentUser.getIdToken()}` },
   });
 }
+
+const PULL_MESSAGES = {
+  'sign-in-required': 'Sign in to convert from a link.',
+};
+
+/**
+ * The file behind a public link, fetched through the file service (browsers
+ * can't read other sites' files). Resolves to { file, fromPage } where file
+ * is a File; `onProgress` gets 0..1 when the size is known.
+ */
+export async function pullLink(link, onProgress = () => {}) {
+  const res = await fetch(`${FILES_URL}/pull?url=${encodeURIComponent(link)}`, {
+    headers: { authorization: `Bearer ${await token()}` },
+    cache: 'no-store',
+  }).catch(() => null);
+  if (!res) throw new Error("The file service couldn't be reached. Check your connection and try again.");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(PULL_MESSAGES[data.error] ?? data.message ?? "That link couldn't be fetched.");
+  }
+  const total = Number(res.headers.get('x-file-size')) || 0;
+  const reader = res.body.getReader();
+  const chunks = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.length;
+    onProgress(total ? Math.min(1, got / total) : null, got);
+  }
+  const type = res.headers.get('content-type') ?? 'application/octet-stream';
+  let name = 'file';
+  try {
+    name = decodeURIComponent(res.headers.get('x-file-name') ?? 'file');
+  } catch {
+    // Keep the plain name.
+  }
+  return { file: new File(chunks, name, { type }), fromPage: res.headers.get('x-from-page') };
+}

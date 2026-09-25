@@ -6,7 +6,7 @@ import Menu from '../Menu.jsx';
 import { shelveFile, unshelveFile, watchHubFiles } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { convertFile, engineReady, familyOf, stopConverting, targetsFor } from '../../lib/convert.js';
-import { downloadFile, fileLink, uploadFile } from '../../lib/files.js';
+import { downloadFile, fileLink, pullLink, uploadFile } from '../../lib/files.js';
 import { formatBytes, timeAgo } from '../../lib/format.js';
 import './HubFiles.css';
 
@@ -33,6 +33,8 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
   const [uploads, setUploads] = useState([]); // { id, name, size, progress, error }
   const [dragging, setDragging] = useState(false);
   const [job, setJob] = useState(null); // { item, target }
+  const [links, setLinks] = useState([]); // files fetched from links, not on the shelf yet
+  const [link, setLink] = useState('');
   const picker = useRef(null);
 
   useEffect(() => watchHubFiles(hub.id, setItems, () => setError("This Hub's files couldn't load.")), [hub.id]);
@@ -60,6 +62,54 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
     }
   }
 
+  // A link: the file behind it comes here, ready to convert or keep.
+  async function fetchLink(raw) {
+    const url = raw.trim();
+    if (!url) return;
+    if (!user) return onSignIn();
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+      setError('Paste a full link, starting with https://');
+      return;
+    }
+    setError(null);
+    setLink('');
+    const id = `${url}-${Math.random()}`;
+    setLinks((prev) => [{ id, url, progress: 0, got: 0 }, ...prev]);
+    const update = (fields) => setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...fields } : l)));
+    try {
+      const { file, fromPage } = await pullLink(url, (progress, got) => update({ progress, got }));
+      update({ file: { name: file.name, size: file.size, type: file.type, local: file }, fromPage, done: true });
+    } catch (err) {
+      update({ error: err.message, done: true });
+    }
+  }
+
+  async function keepLink(entry) {
+    const set = (fields) => setLinks((prev) => prev.map((l) => (l.id === entry.id ? { ...l, ...fields } : l)));
+    set({ saving: 0, saveError: null });
+    try {
+      const label = await uploadFile(entry.file.local, (saving) => set({ saving }));
+      await shelveFile(hub.id, user.uid, label);
+      setLinks((prev) => prev.filter((l) => l.id !== entry.id));
+    } catch (err) {
+      set({ saving: null, saveError: err.code === 'permission-denied' ? "The Hub didn't take it." : err.message });
+    }
+  }
+
+  // Pasting a link anywhere on the Files tab (outside a text box) fetches it.
+  useEffect(() => {
+    const onPaste = (e) => {
+      if (e.target.closest?.('input, textarea, [contenteditable]')) return;
+      const text = e.clipboardData?.getData('text/plain')?.trim() ?? '';
+      if (/^https?:\/\/\S+$/i.test(text)) {
+        e.preventDefault();
+        fetchLink(text);
+      }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  });
+
   async function remove(item) {
     if (!window.confirm(`Take ${item.file.name} off the shelf?`)) return;
     try {
@@ -73,16 +123,22 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
     <div
       className={`shelf ${dragging ? 'is-dragging' : ''}`}
       onDragOver={(e) => {
-        if (!canAdd || ![...e.dataTransfer.types].includes('Files')) return;
+        const types = [...e.dataTransfer.types];
+        if (types.includes('Files') ? !canAdd : !types.includes('text/uri-list')) return;
         e.preventDefault();
         setDragging(true);
       }}
       onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget) || setDragging(false)}
       onDrop={(e) => {
-        if (!canAdd || !e.dataTransfer.files.length) return;
-        e.preventDefault();
+        const dropped = e.dataTransfer.getData('text/uri-list').split('\n').find((l) => l && !l.startsWith('#'));
+        if (e.dataTransfer.files.length && canAdd) {
+          e.preventDefault();
+          add(e.dataTransfer.files);
+        } else if (dropped) {
+          e.preventDefault();
+          fetchLink(dropped);
+        }
         setDragging(false);
-        add(e.dataTransfer.files);
       }}
     >
       <header className="shelf__head">
@@ -116,6 +172,41 @@ export default function HubFiles({ hub, user, access, onSignIn }) {
             Drop files here, or <span className="shelf__browse">browse</span>. Anything on the shelf can be converted to another format.
           </span>
         </button>
+      )}
+
+      {user && (
+        <form
+          className="shelf__link"
+          onSubmit={(e) => {
+            e.preventDefault();
+            fetchLink(link);
+          }}
+        >
+          <Icon name="link" size={16} />
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="Or paste a link to a picture, video, song or file to convert it"
+            aria-label="Link to convert"
+            inputMode="url"
+          />
+          <Button type="submit" size="sm" disabled={!link.trim()}>Get</Button>
+        </form>
+      )}
+
+      {links.length > 0 && (
+        <ul className="shelf__links" aria-label="From links">
+          {links.map((entry) => (
+            <LinkRow
+              key={entry.id}
+              entry={entry}
+              canAdd={canAdd}
+              onConvert={(target) => setJob({ item: { file: entry.file, fromLink: entry.url }, target })}
+              onKeep={() => keepLink(entry)}
+              onDismiss={() => setLinks((prev) => prev.filter((l) => l.id !== entry.id))}
+            />
+          ))}
+        </ul>
       )}
 
       {uploads.length > 0 && (
@@ -191,7 +282,6 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
   const { file } = item;
   const by = usePerson(item.by);
   const targets = targetsFor(file);
-  const groups = [...new Set(targets.map((t) => t.group))];
   const family = familyOf(file);
 
   async function download() {
@@ -215,33 +305,7 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
       </div>
       <div className="tile__actions">
         {targets.length > 0 ? (
-          <Menu
-            label={`Convert ${file.name}`}
-            align="start"
-            trigger={(props) => (
-              <button type="button" className="tile__convert" onClick={props.toggle} aria-expanded={props['aria-expanded']} aria-controls={props['aria-controls']} aria-label={props['aria-label']}>
-                Convert
-                <Icon name="arrowDown" size={13} />
-              </button>
-            )}
-          >
-            <div className="convert-menu">
-              <p className="convert-menu__from">
-                <span className="convert-menu__badge">{extOf(file.name)}</span> into…
-              </p>
-              {groups.map((g) => (
-                <div key={g} className="convert-menu__group">
-                  <span className="convert-menu__group-name">{g}</span>
-                  {targets.filter((t) => t.group === g).map((t) => (
-                    <button key={t.id} type="button" className="convert-menu__item" onClick={() => onConvert(t)}>
-                      <span className="convert-menu__fmt">{t.label}</span>
-                      <span className="convert-menu__hint">{t.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </Menu>
+          <ConvertMenu file={file} onConvert={onConvert} />
         ) : (
           <span className="tile__no-convert" title="Nothing to convert this into yet">No conversions</span>
         )}
@@ -254,6 +318,107 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onSignIn }) {
           </button>
         )}
       </div>
+    </li>
+  );
+}
+
+function ConvertMenu({ file, onConvert }) {
+  const targets = targetsFor(file);
+  const groups = [...new Set(targets.map((t) => t.group))];
+  return (
+    <Menu
+      label={`Convert ${file.name}`}
+      align="start"
+      trigger={(props) => (
+        <button type="button" className="tile__convert" onClick={props.toggle} aria-expanded={props['aria-expanded']} aria-controls={props['aria-controls']} aria-label={props['aria-label']}>
+          Convert
+          <Icon name="arrowDown" size={13} />
+        </button>
+      )}
+    >
+      <div className="convert-menu">
+        <p className="convert-menu__from">
+          <span className="convert-menu__badge">{extOf(file.name)}</span> into…
+        </p>
+        {groups.map((g) => (
+          <div key={g} className="convert-menu__group">
+            <span className="convert-menu__group-name">{g}</span>
+            {targets.filter((t) => t.group === g).map((t) => (
+              <button key={t.id} type="button" className="convert-menu__item" onClick={() => onConvert(t)}>
+                <span className="convert-menu__fmt">{t.label}</span>
+                <span className="convert-menu__hint">{t.hint}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </Menu>
+  );
+}
+
+/** A file fetched from a link: convert it, keep it on the shelf, or let it go. */
+function LinkRow({ entry, canAdd, onConvert, onKeep, onDismiss }) {
+  const host = (() => {
+    try {
+      return new URL(entry.fromPage ?? entry.url).hostname.replace(/^www\./, '');
+    } catch {
+      return entry.url;
+    }
+  })();
+  const [preview, setPreview] = useState(null);
+  const family = entry.file ? familyOf(entry.file) : null;
+  useEffect(() => {
+    if (!entry.file || !['image', 'gif'].includes(family)) return undefined;
+    const url = URL.createObjectURL(entry.file.local);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [entry.file, family]);
+
+  function download() {
+    const url = URL.createObjectURL(entry.file.local);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = entry.file.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
+  const canConvert = entry.file && targetsFor(entry.file).length > 0;
+  return (
+    <li className={`link-row ${entry.error ? 'is-error' : ''}`}>
+      <span className="link-row__thumb">
+        {preview ? <img src={preview} alt="" /> : <Icon name={entry.error ? 'link' : { video: 'video', audio: 'music', image: 'image', gif: 'image' }[family] ?? 'file'} size={18} />}
+      </span>
+      <span className="link-row__text">
+        <span className="link-row__name">{entry.file?.name ?? entry.url}</span>
+        <span className="link-row__meta">
+          {entry.error
+            ? entry.error
+            : !entry.done
+              ? `Fetching from ${host}… ${entry.progress != null ? `${Math.round(entry.progress * 100)}%` : formatBytes(entry.got)}`
+              : entry.saveError ?? `${formatBytes(entry.file.size)} · from ${host}${entry.fromPage ? ' (taken from the page)' : ''}`}
+        </span>
+        {!entry.done && <span className="shelf__bar"><span style={{ width: `${(entry.progress ?? 0.3) * 100}%` }} /></span>}
+      </span>
+      <span className="link-row__actions">
+        {canConvert && <ConvertMenu file={entry.file} onConvert={onConvert} />}
+        {entry.file && !canConvert && <span className="tile__no-convert">No conversions</span>}
+        {entry.file && (
+          <button type="button" className="tile__icon" aria-label={`Download ${entry.file.name}`} title="Download" onClick={download}>
+            <Icon name="download" size={16} />
+          </button>
+        )}
+        {entry.file && canAdd && (
+          <Button size="sm" onClick={onKeep} loading={entry.saving != null} disabled={entry.saving != null}>
+            {entry.saving != null ? `Saving ${Math.round(entry.saving * 100)}%` : 'Save to Files'}
+          </Button>
+        )}
+        {(entry.done || entry.error) && (
+          <button type="button" className="tile__icon" aria-label="Dismiss" title="Dismiss" onClick={onDismiss}>
+            <Icon name="close" size={16} />
+          </button>
+        )}
+      </span>
     </li>
   );
 }
@@ -381,7 +546,7 @@ function ConvertDialog({ hub, user, canAdd, item, target, onClose, onRetarget })
         {busy && (
           <div className="convert__progress" role="status" aria-live="polite">
             <div className="convert__steps">
-              {['fetch', ...(target.media ? ['engine'] : []), 'convert'].map((s) => (
+              {[...(item.file.local ? [] : ['fetch']), ...(target.media ? ['engine'] : []), 'convert'].map((s) => (
                 <span key={s} className={`convert__step ${stage.step === s ? 'is-now' : ''} ${order(stage.step) > order(s) ? 'is-done' : ''}`}>
                   {order(stage.step) > order(s) ? <Icon name="check" size={12} strokeWidth={2.4} /> : null}
                   {STAGES[s]}

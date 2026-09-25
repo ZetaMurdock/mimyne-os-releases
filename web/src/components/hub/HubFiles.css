@@ -55,6 +55,112 @@
 
 
 
+.shelf__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-3);
+  transition: border-color var(--d-press) ease;
+}
+
+.shelf__link:focus-within {
+  border-color: var(--text-3);
+}
+
+.shelf__link input {
+  flex-grow: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.shelf__link input:focus {
+  outline: none;
+}
+
+.shelf__links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+
+.link-row.is-error .link-row__meta {
+  color: #fca5a5;
+}
+
+.link-row__thumb {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+  background: #0c0c0d;
+  color: var(--text-3);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.link-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.link-row__text {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.link-row__name {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-row__meta {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.link-row__actions .tile__convert {
+  width: auto;
+  padding: 0 12px;
+}
+
 .shelf__uploads {
   display: flex;
   flex-direction: column;
@@ -629,6 +735,15 @@
 }
 
 @media (max-width: 640px) {
+  .link-row {
+    flex-wrap: wrap;
+  }
+
+  .link-row__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .shelf__head {
     flex-direction: column;
     align-items: stretch;
