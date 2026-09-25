@@ -1,20 +1,68 @@
-.profile__banner {
-  height: 200px;
-  border-bottom: 1px solid var(--border);
-  background: #121214 center / cover no-repeat;
+.profile {
+  /* As wide as the two columns below, so the name lines up with them. */
+  --profile-w: min(760px + var(--s-7) + 340px, 100% - 32px);
+  position: relative;
+  padding-bottom: var(--s-6);
 }
 
-/* Signed in, the banner runs up under the floating notch. */
-.profile .profile__banner {
-  height: 240px;
+/* The background behind everything, fixed like a Steam profile's. */
+.profile__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.profile__backdrop-shade {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* Over a background, cards turn to glass so the page shows through. */
+.profile--backdrop .card,
+.profile--backdrop .profile__glass {
+  background: rgba(18, 18, 20, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* The page's own backdrop has to go, or the fixed background can't show. */
+body:has(.profile--backdrop) {
+  background: transparent;
+}
+
+.profile__banner {
+  position: relative;
+  height: 260px;
   margin-top: calc(-1 * (var(--notch-h) + 32px));
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(124, 58, 237, 0.16), transparent 55%), #121214;
+}
+
+.profile__banner img,
+.profile__banner video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile__banner-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.5));
 }
 
 .profile__identity {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 20px;
-  width: min(var(--page-max), 100% - 32px);
+  width: var(--profile-w);
   margin: -52px auto 0;
 }
 
@@ -26,9 +74,9 @@
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  gap: var(--s-1);
+  gap: 6px;
   min-width: 0;
-  padding-bottom: 6px;
+  padding-bottom: 4px;
 }
 
 .profile__name {
@@ -40,34 +88,183 @@
   letter-spacing: -0.025em;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
 .profile__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   color: var(--text-2);
   font-size: 14px;
 }
 
+.profile__since {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.profile__stalkers {
+  font-size: 12px;
+}
+
+.profile__stalkers.is-mine {
+  color: var(--accent-text, #c4b5fd);
+}
+
 .profile__actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--s-2);
   padding-bottom: 6px;
 }
 
+.profile__bio {
+  width: var(--profile-w);
+  margin: var(--s-3) auto 0;
+  color: var(--text-2);
+  font-size: 15px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .profile__error {
-  width: min(var(--page-max), 100% - 32px);
+  width: var(--profile-w);
   margin: var(--s-3) auto 0;
 }
 
-.profile .frame {
+.profile__frame,
+.profile__single {
   margin-top: var(--s-6);
 }
 
-.profile__note {
-  font-size: 15px;
+.profile__single {
+  width: var(--profile-w);
+  margin-right: auto;
+  margin-left: auto;
 }
 
-.profile__bio {
+.profile__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile__hint,
+.profile__none {
   font-size: 13px;
+}
+
+.profile__note {
+  padding: 12px 14px;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.profile--backdrop .profile__note {
+  background: rgba(18, 18, 20, 0.72);
+}
+
+.profile__playing {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile__empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: var(--profile-w);
+  margin: var(--s-6) auto 0;
+  padding: 20px;
+  color: var(--text-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.chip img {
+  width: 14px;
+  height: 14px;
+}
+
+.chip--button:hover {
+  background: var(--hover);
+}
+
+.bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.bubble {
+  position: relative;
+  width: 150px;
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bubble__poster {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bubble__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.55));
+}
+
+.bubble__name {
+  position: absolute;
+  left: 50%;
+  max-width: 126px;
+  overflow: hidden;
+  padding: 3px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  background: rgba(10, 10, 12, 0.72);
+  color: #f2eefa;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
 }
 
 .profile-locked {
@@ -93,15 +290,11 @@
     gap: var(--s-3);
   }
 
+  .profile__actions {
+    justify-content: flex-start;
+  }
+
   .profile__name {
     font-size: 28px;
   }
-}
-
-.profile__empty {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  padding: var(--s-6) 0;
-  text-align: center;
 }

@@ -138,3 +138,21 @@ export function notifyComment(me, { scope, postId, commentId, parentId, text: wo
 export function notifyStalk(me, uid) {
   return send(me, uid, `stalk__${me}`, { type: 'stalk' });
 }
+
+export function notifyBuddyRequest(me, uid) {
+  return send(me, uid, `friend_request__${me}`, { type: 'friend_request' });
+}
+
+export function notifyBuddyAccept(me, uid) {
+  return send(me, uid, `friend_accept__${me}`, { type: 'friend_accept' });
+}
+
+/**
+ * An approval of something on a profile the app has had longer than the
+ * website: the profile itself, a workspace on it (target 'workspace'), a
+ * song. These carry no vote, and the app only tells approvals, never
+ * disapprovals, so neither does this.
+ */
+export function notifyProfileLike(me, uid, target, targetId) {
+  return send(me, uid, `like__${target}__${targetId}__${me}`, { type: 'like', target, targetId });
+}

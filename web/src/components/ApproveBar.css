@@ -162,3 +162,12 @@
   .fx-approve-crown, .fx-approve-sparks, .fx-approve-shard, .fx-approve-pop,
   .fx-disapprove-splat, .fx-disapprove-stain, .fx-disapprove-droplet, .fx-disapprove-dip { animation: none; }
 }
+
+.approve.is-disabled .approve__btn {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.approve.is-disabled .approve__btn:hover {
+  background: transparent;
+}

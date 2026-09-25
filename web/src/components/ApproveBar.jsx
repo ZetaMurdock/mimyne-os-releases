@@ -12,7 +12,7 @@ import './ApproveBar.css';
 // Each new approval sets off the app's crown burst and each new disapproval
 // its splat, at once rather than when the write lands: a celebration that
 // arrives late is no celebration. Taking a vote back plays nothing.
-export default function ApproveBar({ count, mine = null, small = false, onVote }) {
+export default function ApproveBar({ count, mine = null, small = false, disabled = false, onVote }) {
   const { user } = useSession();
   const [burst, setBurst] = useState(0);
   const [splat, setSplat] = useState(0);
@@ -20,6 +20,7 @@ export default function ApproveBar({ count, mine = null, small = false, onVote }
   const size = small ? 14 : 16;
 
   function press(vote) {
+    if (disabled) return;
     if (user && mine !== vote) {
       plays.current += 1;
       (vote === 'up' ? setBurst : setSplat)(plays.current);
@@ -28,7 +29,7 @@ export default function ApproveBar({ count, mine = null, small = false, onVote }
   }
 
   return (
-    <span className={`approve ${small ? 'approve--small' : ''}`}>
+    <span className={`approve ${small ? 'approve--small' : ''} ${disabled ? 'is-disabled' : ''}`} title={disabled ? "You can't vote on your own" : undefined}>
       <button
         type="button"
         className={`approve__btn approve__btn--up ${mine === 'up' ? 'is-on' : ''}`}
