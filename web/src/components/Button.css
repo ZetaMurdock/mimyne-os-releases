@@ -1,0 +1,88 @@
+/* A button has seven states: default, hover, pressed, focused, disabled,
+   loading and selected. */
+.btn {
+  --btn-bg: var(--surface-2);
+  --btn-bg-hover: var(--hover);
+  --btn-fg: var(--text);
+  --btn-border: transparent;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  flex-shrink: 0;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-pill);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background-color var(--d-press) ease,
+    transform var(--d-press) ease,
+    opacity var(--d-press) ease;
+}
+
+.btn:hover {
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled:not(.is-loading) {
+  opacity: 0.45;
+}
+
+.btn--sm { height: 32px; padding: 0 14px; font-size: 12px; }
+.btn--md { height: 36px; padding: 0 16px; font-size: 13px; }
+.btn--lg { height: 52px; padding: 0 26px; font-size: 16px; }
+
+.btn--icon { padding: 0; aspect-ratio: 1; }
+
+.btn--primary {
+  --btn-bg: var(--accent);
+  --btn-bg-hover: var(--accent-hover);
+  --btn-fg: #fff;
+}
+
+.btn--primary:active:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.btn--secondary {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--surface-2);
+  --btn-border: var(--border-2);
+}
+
+.btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--surface-2);
+  --btn-fg: var(--text-2);
+  font-weight: 500;
+}
+
+.btn--inverse {
+  --btn-bg: var(--text);
+  --btn-bg-hover: #d4d4d8;
+  --btn-fg: var(--bg);
+}
+
+.btn.is-selected {
+  --btn-bg: var(--surface-2);
+  --btn-bg-hover: var(--hover);
+  --btn-fg: var(--text);
+  --btn-border: var(--border-2);
+}
+
+.btn__spinner {
+  animation: btn-spin 700ms linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}

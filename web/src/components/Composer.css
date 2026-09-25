@@ -1,0 +1,86 @@
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: var(--s-4);
+}
+
+.composer--compact {
+  gap: 10px;
+  padding: 14px var(--s-4);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+}
+
+.composer__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+
+.composer__input {
+  flex-grow: 1;
+  min-height: 48px;
+  padding: 10px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.composer--compact .composer__input {
+  font-size: var(--t-body);
+  padding: 4px 0;
+}
+
+.composer__input::placeholder {
+  color: var(--text-3);
+}
+
+.composer__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.composer:not(.composer--compact) .composer__files,
+.composer:not(.composer--compact) .composer__bar {
+  margin-left: 52px;
+}
+
+.composer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.composer__spacer {
+  flex-grow: 1;
+}
+
+.composer__to {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-right: var(--s-2);
+}
+
+.composer__select {
+  height: 34px;
+  margin-right: var(--s-2);
+  padding: 0 12px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .composer:not(.composer--compact) .composer__files,
+  .composer:not(.composer--compact) .composer__bar {
+    margin-left: 0;
+  }
+}
