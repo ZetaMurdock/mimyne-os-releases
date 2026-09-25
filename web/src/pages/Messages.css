@@ -547,3 +547,16 @@
 .reply-bar__close:hover {
   color: var(--text);
 }
+
+.msg__mark {
+  width: 22px;
+  height: auto;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.9;
+}
+
+.msg__shared-kind .msg__mark {
+  width: 18px;
+  margin-left: 0;
+}

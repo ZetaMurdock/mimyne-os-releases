@@ -7,6 +7,7 @@ import { getHubCard, openDirect, sendMessage, watchConversations } from '../data
 import { lookupUsername } from '../data/identity.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
+import { shareUrl } from '../lib/share.js';
 import './ShareDialog.css';
 
 /**
@@ -23,7 +24,7 @@ export default function ShareDialog({ title = 'Share', link, payload, onClose })
   const [busy, setBusy] = useState(null);
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
-  const url = link ? new URL(link, location.origin).href : null;
+  const url = link ? shareUrl(link) : null;
 
   useEffect(() => (user && payload ? watchConversations(user.uid, (list) => setConversations(list.filter((c) => !c.pending))) : undefined), [user?.uid, payload]);
 

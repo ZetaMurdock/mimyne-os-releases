@@ -118,7 +118,7 @@ async function popUp(notice, onClick) {
   try {
     const shown = new Notification(`${name} ${describeNotice(notice)}`.slice(0, 120), {
       tag: notice.id,
-      icon: person?.picture?.startsWith('https://') ? person.picture : '/favicon.png',
+      icon: person?.picture?.startsWith('https://') ? person.picture : '/favicon-192.png',
     });
     shown.onclick = () => {
       window.focus();
