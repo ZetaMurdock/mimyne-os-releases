@@ -12,6 +12,7 @@ import { usePerson } from '../../data/people.js';
 import { uploadPicked } from '../../lib/files.js';
 import { insertAt, placeCaret } from '../../lib/insert.js';
 import { splitLinks } from '../../lib/links.js';
+import './RoomChat.css';
 
 const PAGE = 150;
 // Messages from one person this close together share one header.
@@ -245,11 +246,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
         )}
         {messages && messages.length < count && (
           <div className="room__start">
-            <span className="room__start-icon">
-              <Icon name={room.kind === 'announce' ? 'megaphone' : 'hash'} size={34} />
-            </span>
-            <h3>Welcome to #{room.name}</h3>
-            <p className="muted">{room.topic || `This is the start of #${room.name} in ${hub.name}.`}</p>
+            <p className="muted">The start of {room.name}'s chat.{room.topic ? ` ${room.topic}` : ''}</p>
           </div>
         )}
         {messages === null && <RoomSkeleton />}
@@ -297,7 +294,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
       {!user ? (
         <div className="room__locked">
           <Icon name="lock" size={16} />
-          <span>Sign in to talk in #{room.name}.</span>
+          <span>Sign in to talk in #{room.tag}.</span>
           <Button size="sm" variant="inverse" onClick={onSignIn}>Sign in</Button>
         </div>
       ) : !canTalk ? (
@@ -305,7 +302,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
           <Icon name={room.kind === 'announce' ? 'megaphone' : 'lock'} size={16} />
           <span>
             {room.kind === 'announce' && access.canPost
-              ? `Only the owner and mods post in #${room.name}.`
+              ? `Only the owner and mods post in #${room.tag}.`
               : 'Only people who pledged can talk here. The Hub’s owner set it that way.'}
           </span>
         </div>
@@ -362,8 +359,8 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
               ref={input}
               className="room__input"
               rows={1}
-              aria-label={`Message #${room.name}`}
-              placeholder={`Message #${room.name}`}
+              aria-label={`Message #${room.tag}`}
+              placeholder={`Message #${room.tag}`}
               maxLength={4000}
               value={text}
               onChange={onType}
@@ -386,7 +383,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
       {dragging && (
         <div className="room__drop" aria-hidden="true">
           <Icon name="upload" size={32} />
-          <strong>Drop to attach to #{room.name}</strong>
+          <strong>Drop to attach to #{room.tag}</strong>
         </div>
       )}
 

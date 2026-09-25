@@ -42,6 +42,14 @@ const paths = {
   users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6" /></>,
   table: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M3 15h18M9 4v16" /></>,
   arrowDown: <><path d="M12 5v14" /><path d="m6 13 6 6 6-6" /></>,
+  cursor: <path d="M5 3l14 7-6 2-2 6z" />,
+  note: <><path d="M5 4h14v11l-5 5H5z" /><path d="M14 20v-5h5" /></>,
+  type: <><path d="M5 6V4h14v2" /><path d="M12 4v16" /><path d="M9 20h6" /></>,
+  shape: <><circle cx="8" cy="8" r="4.5" /><rect x="11" y="11" width="9" height="9" rx="1.5" /></>,
+  columns: <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="10" rx="1.5" /></>,
+  arrowRight: <><path d="M4 12h15" /><path d="m13 6 6 6-6 6" /></>,
+  layout: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 14h18" /></>,
+  minimize: <path d="M6 12h12" />,
   copy: <><rect x="8" y="8" width="13" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></>,
 };
 

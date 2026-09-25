@@ -3,44 +3,57 @@ import { Avatar } from '../Avatar.jsx';
 import Button from '../Button.jsx';
 import Dialog from '../Dialog.jsx';
 import Icon from '../Icon.jsx';
+import Canvas from '../canvas/Canvas.jsx';
 import RoomChat from './RoomChat.jsx';
 import {
-  createRoom, deleteRoom, leaveHere, roomName, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
+  createRoom, deleteRoom, leaveHere, levelIn, roomName, roomRights, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
 } from '../../data/rooms.js';
+import { watchCanvas, watchPreview } from '../../data/canvas.js';
 import { usePerson } from '../../data/people.js';
 import { watchStatusSettings } from '../../data/status.js';
+import { timeAgo } from '../../lib/format.js';
 import './HubRooms.css';
 
-// When each Room was last read on this device, for its unread mark.
-const SEEN_KEY = 'mimyne.roomSeen';
-function seenMap() {
-  try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY)) ?? {};
-  } catch {
-    return {};
-  }
-}
-function markSeen(key) {
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify({ ...seenMap(), [key]: Date.now() }));
-  } catch {
-    // Storage blocked: the mark just stays.
-  }
+const ACCESS_LABEL = { edit: 'You can edit', add: 'You can add notes', view: 'You can view' };
+const SORTS = [
+  { id: 'busy', label: 'Busiest first' },
+  { id: 'recent', label: 'Recently edited' },
+  { id: 'order', label: 'In order' },
+];
+
+const plural = (name) => (/s$/i.test(name) ? name : `${name}s`);
+const roleName = (roles, level, fallback) => roles.find((r) => r.level === level)?.name ?? fallback;
+
+/** Who a level of people is, in the Hub's own words: "the Warden and Keepers". */
+function whoLabel(who, roles) {
+  if (who === 'owner') return `the ${roleName(roles, 'owner', 'owner')}`;
+  if (who === 'mods') return `the ${roleName(roles, 'owner', 'owner')} and ${plural(roleName(roles, 'mod', 'mod'))}`;
+  if (who === 'pledged') return 'pledged people';
+  return 'everyone';
 }
 
+/** A locked Room's front: "Keepers only". */
+function onlyLabel(who, roles) {
+  if (who === 'owner') return `${roleName(roles, 'owner', 'Owner')} only`;
+  if (who === 'mods') return `${plural(roleName(roles, 'mod', 'Mod'))} only`;
+  return 'Pledged only';
+}
+
+const rightsLabel = (rights) => ACCESS_LABEL[rights.edit ? 'edit' : rights.add ? 'add' : 'view'];
+
 /**
- * A Hub's Rooms, laid out the way Discord lays out a server: the Rooms down
- * the left, the chat in the middle, who's here and who pledged on the right.
+ * A Hub's Rooms. Each is a workspace: a canvas of notes, files, shapes,
+ * lists and arrows, with a chat under it. The grid shows them as cards;
+ * opening one fills the tab with it.
  */
 export default function HubRooms({ hub, members, roles, roleOf, user, access, roomId, onRoom, onSignIn }) {
   const [rooms, setRooms] = useState(null);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // a room, or 'new'
-  const [showPeople, setShowPeople] = useState(true);
-  const [latest, setLatest] = useState({});
-  const [, setSeenTick] = useState(0);
-  const here = useHere(hub.id, user, roomId);
+  const [writing, setWriting] = useState(false);
   const madeGeneral = useRef(false);
+  const level = levelIn(hub, user, members, access.isPledged);
+  const here = useHere(hub.id, user, roomId, writing);
 
   useEffect(() => watchRooms(hub.id, setRooms, () => setError("This Hub's Rooms couldn't load.")), [hub.id]);
 
@@ -48,130 +61,407 @@ export default function HubRooms({ hub, members, roles, roleOf, user, access, ro
   useEffect(() => {
     if (rooms && rooms.length === 0 && access.canModerate && user && !madeGeneral.current) {
       madeGeneral.current = true;
-      createRoom(hub.id, { name: 'general', topic: 'Say hi.' }, user.uid).catch(() => {});
+      createRoom(hub.id, { name: 'General', tag: 'general', topic: 'Say hi.' }, user.uid).catch(() => {});
     }
   }, [rooms, access.canModerate, user, hub.id]);
 
-  const active = rooms?.find((r) => r.id === roomId) ?? rooms?.[0] ?? null;
+  const open = roomId && rooms ? rooms.find((r) => r.id === roomId) : null;
+  const rightsOf = (room) => roomRights(room, level, !!access.canPost);
 
-  // The newest message in every Room, for the unread marks.
-  const roomKey = rooms?.map((r) => r.id).join(',') ?? '';
-  useEffect(() => {
-    if (!roomKey) return undefined;
-    const stops = roomKey.split(',').map((id) => watchLatest(hub.id, id, (m) => setLatest((prev) => ({ ...prev, [id]: m }))));
-    return () => stops.forEach((stop) => stop());
-  }, [hub.id, roomKey]);
-
-  const seenKey = active ? `${hub.id}/${active.id}` : null;
-  useEffect(() => {
-    if (!seenKey) return;
-    markSeen(seenKey);
-    setSeenTick((n) => n + 1);
-  }, [seenKey, latest[active?.id]?.at]);
-
-  const seen = seenMap();
-  const unread = (room) => {
-    const last = latest[room.id];
-    return room.id !== active?.id && !!last && last.from !== user?.uid && last.at > (seen[`${hub.id}/${room.id}`] ?? 0);
-  };
-
-  async function move(room, by) {
-    const list = [...rooms];
-    const i = list.indexOf(room);
-    const j = i + by;
-    if (j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j], list[i]];
-    await Promise.all(list.map((r, order) => (r.order === order ? null : updateRoom(hub.id, r, { order })))).catch(() => setError("The Rooms couldn't be reordered."));
+  let body;
+  if (roomId && rooms && !open) {
+    body = (
+      <div className="rooms-empty">
+        <p>That Room isn't here any more.</p>
+        <Button onClick={() => onRoom(null)}>All Rooms</Button>
+      </div>
+    );
+  } else if (open) {
+    body = (
+      <RoomView
+        key={open.id}
+        hub={hub}
+        room={open}
+        rights={rightsOf(open)}
+        user={user}
+        access={access}
+        members={members}
+        roles={roles}
+        roleOf={roleOf}
+        here={here}
+        onBack={() => onRoom(null)}
+        onSettings={() => setEditing(open)}
+        onSignIn={onSignIn}
+        onWriting={setWriting}
+      />
+    );
+  } else {
+    body = (
+      <RoomGrid
+        hub={hub}
+        rooms={rooms}
+        error={error}
+        roles={roles}
+        members={members}
+        here={here}
+        rightsOf={rightsOf}
+        canModerate={access.canModerate}
+        signedIn={!!user}
+        onOpen={onRoom}
+        onNew={() => setEditing('new')}
+        onSettings={setEditing}
+      />
+    );
   }
 
   return (
-    <div className={`rooms ${showPeople ? '' : 'rooms--no-people'}`}>
-      <nav className="rooms__list" aria-label={`${hub.name} Rooms`}>
-        <div className="rooms__group">
-          <span className="rooms__group-name">Rooms</span>
-          {access.canModerate && (
-            <button type="button" className="rooms__add" aria-label="New Room" title="New Room" onClick={() => setEditing('new')}>
-              <Icon name="plus" size={15} />
-            </button>
-          )}
-        </div>
-        {error && <p className="form-error rooms__error">{error}</p>}
-        {rooms === null && <span className="rooms__skeleton" aria-hidden="true" />}
-        {rooms?.length === 0 && <p className="muted rooms__none">{access.canModerate ? 'Opening #general…' : 'No Rooms yet.'}</p>}
-        {rooms?.map((room) => (
-          <div key={room.id} className={`rooms__item ${room === active ? 'is-active' : ''} ${unread(room) ? 'is-unread' : ''}`}>
-            <button type="button" className="rooms__link" onClick={() => onRoom(room.id)} aria-current={room === active ? 'page' : undefined}>
-              <Icon name={room.kind === 'announce' ? 'megaphone' : 'hash'} size={17} />
-              <span className="rooms__name">{room.name}</span>
-              {unread(room) && <span className="rooms__dot" aria-label="New messages" />}
-            </button>
-            {access.canModerate && (
-              <button type="button" className="rooms__gear" aria-label={`Edit #${room.name}`} title="Edit Room" onClick={() => setEditing(room)}>
-                <Icon name="gear" size={14} />
-              </button>
-            )}
-          </div>
-        ))}
-      </nav>
-
-      <section className="rooms__chat" aria-label={active ? `#${active.name}` : 'Room'}>
-        {active ? (
-          <>
-            <header className="rooms__head">
-              <Icon name={active.kind === 'announce' ? 'megaphone' : 'hash'} size={20} />
-              <h2 className="rooms__title">{active.name}</h2>
-              {active.topic && <p className="rooms__topic">{active.topic}</p>}
-              <span className="rooms__head-tools">
-                <button
-                  type="button"
-                  className={`rooms__tool ${showPeople ? 'is-on' : ''}`}
-                  aria-pressed={showPeople}
-                  aria-label="Show who's here"
-                  title="Who's here"
-                  onClick={() => setShowPeople((v) => !v)}
-                >
-                  <Icon name="users" size={18} />
-                </button>
-              </span>
-            </header>
-            <RoomChat
-              key={active.id}
-              hub={hub}
-              room={active}
-              user={user}
-              access={access}
-              members={members}
-              roleOf={roleOf}
-              onSignIn={onSignIn}
-            />
-          </>
-        ) : (
-          <div className="rooms__empty">
-            <Icon name="hash" size={32} />
-            <p>{rooms === null ? 'Loading Rooms…' : 'Pick a Room to start talking.'}</p>
-          </div>
-        )}
-      </section>
-
-      {showPeople && <People hub={hub} members={members} roles={roles} roleOf={roleOf} here={here} rooms={rooms ?? []} />}
-
+    <>
+      {body}
       {editing && (
         <RoomDialog
           hub={hub}
           room={editing === 'new' ? null : editing}
-          count={rooms?.length ?? 0}
+          rooms={rooms ?? []}
+          roles={roles}
           user={user}
-          onMove={(by) => move(editing, by)}
           onClose={() => setEditing(null)}
           onMade={onRoom}
+          onDeleted={() => onRoom(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
-/** Keeps you on the Hub's "Here now" list while you're in its Rooms (unless you're invisible). */
-function useHere(hubId, user, roomId) {
+// ------------------------------------------------------------------ grid
+
+function RoomGrid({ hub, rooms, error, roles, members, here, rightsOf, canModerate, signedIn, onOpen, onNew, onSettings }) {
+  const [sort, setSort] = useState('busy');
+  const sorted = useMemo(() => {
+    const count = (id) => Object.values(here).filter((h) => h.room === id).length;
+    const list = [...(rooms ?? [])];
+    if (sort === 'busy') list.sort((a, b) => count(b.id) - count(a.id) || (b.editedAt ?? 0) - (a.editedAt ?? 0) || a.order - b.order);
+    if (sort === 'recent') list.sort((a, b) => (b.editedAt ?? 0) - (a.editedAt ?? 0));
+    return list;
+  }, [rooms, sort, here]);
+  const inRoom = (id) => Object.entries(here).filter(([, h]) => h.room === id).map(([uid, h]) => ({ uid, ...h }));
+
+  return (
+    <section className="rooms-grid" aria-label="Rooms">
+      <header className="rooms-grid__head">
+        <h2 className="rooms-grid__title">Rooms</h2>
+        <select className="rooms-grid__sort" aria-label="Sort Rooms" value={sort} onChange={(e) => setSort(e.target.value)}>
+          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </header>
+      {error && <p className="form-error">{error}</p>}
+      <div className="rooms-grid__list">
+        {rooms === null && [0, 1, 2].map((i) => <div key={i} className="room-tile room-tile--skeleton" aria-hidden="true" />)}
+        {sorted.map((room) => (
+          <RoomTile
+            key={room.id}
+            hub={hub}
+            room={room}
+            rights={rightsOf(room)}
+            roles={roles}
+            members={members}
+            inside={inRoom(room.id)}
+            signedIn={signedIn}
+            canModerate={canModerate}
+            onOpen={() => onOpen(room.id)}
+            onSettings={() => onSettings(room)}
+          />
+        ))}
+        {canModerate && (
+          <button type="button" className="room-tile room-tile--add" onClick={onNew}>
+            <Icon name="plus" size={20} />
+            <strong>Add a workspace as a room</strong>
+            <span>A canvas for notes, files and lists, with a chat under it</span>
+          </button>
+        )}
+        {rooms?.length === 0 && !canModerate && <p className="muted">No Rooms yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function RoomTile({ hub, room, rights, roles, members, inside, signedIn, canModerate, onOpen, onSettings }) {
+  const live = inside.length > 0 && rights.view;
+  const writer = inside.find((h) => h.writing);
+  return (
+    <article className={`room-tile ${live ? 'is-live' : ''} ${rights.view ? '' : 'is-locked'}`}>
+      <button type="button" className="room-tile__open" onClick={onOpen} aria-label={`Open ${room.name}`} disabled={!rights.view} />
+      <div className="room-tile__front">
+        {rights.view ? (room.pending ? <span className="room-tile__blank">Setting up…</span> : <Preview hubId={hub.id} roomId={room.id} />) : (
+          <span className="room-tile__lock"><Icon name="lock" size={14} /> {onlyLabel(room.access.view, roles)}</span>
+        )}
+        {live && <span className="room-tile__live">● LIVE</span>}
+        {canModerate && (
+          <button type="button" className="room-tile__gear" aria-label={`Settings for ${room.name}`} title="Room settings" onClick={onSettings}>
+            <Icon name="gear" size={14} />
+          </button>
+        )}
+      </div>
+      <div className="room-tile__body">
+        <div className="room-tile__title">
+          <h3 className="room-tile__name">
+            {room.kind === 'announce' && <Icon name="megaphone" size={14} />}
+            {room.name}
+          </h3>
+          <span className="room-tile__tag">#{room.tag}</span>
+        </div>
+        {rights.view ? (
+          <div className="room-tile__status">
+            {writer ? (
+              <Writer uid={writer.uid} members={members} />
+            ) : live ? (
+              <Inside people={inside} members={members} />
+            ) : (
+              <span className="room-tile__who is-quiet">
+                Quiet{room.editedAt ? ` · edited ${timeAgo(room.editedAt)}` : room.topic ? ` · ${room.topic}` : ''}
+              </span>
+            )}
+            <span className="room-tile__access">{signedIn ? rightsLabel(rights) : 'View only'}</span>
+          </div>
+        ) : (
+          <p className="room-tile__who is-quiet">Only {whoLabel(room.access.view, roles)} can see inside</p>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function Writer({ uid, members }) {
+  const person = usePerson(uid, members.find((m) => m.uid === uid)?.name);
+  return (
+    <>
+      <Avatar person={person} size={20} />
+      <span className="room-tile__who">{person.name} is writing</span>
+    </>
+  );
+}
+
+function Inside({ people, members }) {
+  const first = usePerson(people[0]?.uid, members.find((m) => m.uid === people[0]?.uid)?.name);
+  const second = usePerson(people[1]?.uid ?? null, members.find((m) => m.uid === people[1]?.uid)?.name);
+  const words = people.length === 1 ? `${first.name} is here` : `${first.name}, ${second.name}${people.length > 2 ? ` and ${people.length - 2} more` : ''}`;
+  return (
+    <>
+      <span className="room-tile__faces">
+        {people.slice(0, 3).map((p) => <Face key={p.uid} uid={p.uid} members={members} />)}
+      </span>
+      <span className="room-tile__who">{words}</span>
+    </>
+  );
+}
+
+function Face({ uid, members }) {
+  return <Avatar person={usePerson(uid, members.find((m) => m.uid === uid)?.name)} size={20} />;
+}
+
+/** The Room's front: its canvas in miniature. */
+function Preview({ hubId, roomId }) {
+  const [nodes, setNodes] = useState(null);
+  useEffect(() => watchPreview(hubId, roomId, setNodes), [hubId, roomId]);
+  const shown = (nodes ?? []).filter((n) => !n.parentId);
+  if (!shown.length) return <span className="room-tile__blank">{nodes ? 'Empty canvas' : ''}</span>;
+  const boxes = shown.map((n) => {
+    const w = n.style.width ?? (n.type === 'list' ? 272 : n.type === 'file' ? 280 : 220);
+    const cards = nodes.filter((c) => c.parentId === n.id).length;
+    const h = n.style.height ?? (n.type === 'list' ? 80 + cards * 44 : n.type === 'shape' ? 110 : 70);
+    return { n, x: n.x - w / 2, y: n.type === 'list' ? n.y - 24 : n.y - h / 2, w, h };
+  });
+  const minX = Math.min(...boxes.map((b) => b.x)) - 60;
+  const minY = Math.min(...boxes.map((b) => b.y)) - 60;
+  const maxX = Math.max(...boxes.map((b) => b.x + b.w)) + 60;
+  const maxY = Math.max(...boxes.map((b) => b.y + b.h)) + 60;
+  return (
+    <svg className="room-tile__preview" viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      {boxes.map(({ n, x, y, w, h }) => (
+        <rect
+          key={n.id}
+          x={x}
+          y={y}
+          width={w}
+          height={h}
+          rx={n.style.shape === 'ellipse' || n.style.shape === 'pill' ? Math.min(w, h) / 2 : 10}
+          fill={n.type === 'text' ? 'none' : n.style.color ? `${n.style.color}33` : '#1d1d22'}
+          stroke={n.type === 'text' ? 'none' : n.style.color ?? '#3a3a40'}
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </svg>
+  );
+}
+
+// ------------------------------------------------------------------ a Room
+
+function RoomView({ hub, room, rights, user, access, members, roles, roleOf, here, onBack, onSettings, onSignIn, onWriting }) {
+  const [nodes, setNodes] = useState(null);
+  const [edges, setEdges] = useState([]);
+  const [error, setError] = useState(null);
+  const [show, setShow] = useState(readLayout);
+  const [chatHeight, setChatHeight] = useState(readChatHeight);
+  const [latest, setLatest] = useState(null);
+  const [seenAt, setSeenAt] = useState(Date.now());
+  const root = useRef(null);
+  const chatHeightRef = useRef(chatHeight);
+  chatHeightRef.current = chatHeight;
+
+  const ready = rights.view && !room.pending;
+  useEffect(() => {
+    if (!ready) return undefined;
+    return watchCanvas(hub.id, room.id, setNodes, setEdges, () => setError("This Room's canvas couldn't load."));
+  }, [hub.id, room.id, ready]);
+  useEffect(() => (ready ? watchLatest(hub.id, room.id, setLatest) : undefined), [hub.id, room.id, ready]);
+  useEffect(() => {
+    if (show.chat) setSeenAt(Date.now());
+  }, [show.chat, latest?.at]);
+  useEffect(() => {
+    root.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem('mimyne.roomLayout', JSON.stringify(show));
+    } catch {
+      // Storage blocked: it just won't be remembered.
+    }
+  }, [show]);
+
+  const inside = Object.entries(here).filter(([, h]) => h.room === room.id).map(([uid, h]) => ({ uid, ...h }));
+  const unreadChat = !show.chat && latest && latest.from !== user?.uid && latest.at > seenAt;
+
+  // Either may be put away, but not both.
+  const toggle = (part) => setShow((s) => {
+    const next = { ...s, [part]: !s[part] };
+    return next.canvas || next.chat ? next : { canvas: part !== 'canvas', chat: part !== 'chat' };
+  });
+
+  function startResize(e) {
+    e.preventDefault();
+    const box = root.current.querySelector('.room-view__body').getBoundingClientRect();
+    const move = (ev) => setChatHeight(Math.min(box.height - 160, Math.max(140, box.bottom - ev.clientY)));
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try {
+        localStorage.setItem('mimyne.chatHeight', String(Math.round(chatHeightRef.current)));
+      } catch {
+        // Not remembered.
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  return (
+    <section ref={root} className="room-view" aria-label={room.name}>
+      <header className="room-view__head">
+        <button type="button" className="room-view__back" onClick={onBack} aria-label="All Rooms" title="All Rooms">
+          <Icon name="back" size={16} />
+        </button>
+        <div className="room-view__names">
+          <h2 className="room-view__name">{room.name}</h2>
+          <span className="room-view__tag">#{room.tag}</span>
+          {room.topic && <span className="room-view__topic">{room.topic}</span>}
+        </div>
+        <span className="room-view__spacer" />
+        {inside.length > 0 && (
+          <span className="room-view__faces" title={`${inside.length} here now`}>
+            {inside.slice(0, 5).map((p) => <Face key={p.uid} uid={p.uid} members={members} />)}
+            {inside.length > 5 && <span className="room-view__more">+{inside.length - 5}</span>}
+          </span>
+        )}
+        {rights.view && user && <span className="room-tile__access">{rightsLabel(rights)}</span>}
+        <div className="room-view__layout" role="group" aria-label="Show">
+          <button type="button" className={show.canvas ? 'is-on' : ''} aria-pressed={show.canvas} onClick={() => toggle('canvas')}>
+            <Icon name="layout" size={15} /> Canvas
+          </button>
+          <button type="button" className={show.chat ? 'is-on' : ''} aria-pressed={show.chat} onClick={() => toggle('chat')}>
+            <Icon name="message" size={15} /> Chat
+            {unreadChat && <span className="room-view__dot" aria-label="New messages" />}
+          </button>
+        </div>
+        {access.canModerate && (
+          <button type="button" className="room-view__icon" aria-label="Room settings" title="Room settings" onClick={onSettings}>
+            <Icon name="gear" size={16} />
+          </button>
+        )}
+      </header>
+
+      {!rights.view ? (
+        <div className="rooms-empty">
+          <Icon name="lock" size={22} />
+          <p>Only {whoLabel(room.access.view, roles)} can see inside {room.name}.</p>
+        </div>
+      ) : (
+        <div className="room-view__body">
+          {show.canvas ? (
+            <div className="room-view__canvas">
+              {error ? (
+                <p className="form-error">{error}</p>
+              ) : nodes === null ? (
+                <div className="room-view__loading">Loading the canvas…</div>
+              ) : (
+                <Canvas
+                  nodes={nodes}
+                  edges={edges}
+                  rights={user ? rights : { view: true, add: false, edit: false }}
+                  uid={user?.uid}
+                  hubId={hub.id}
+                  roomId={room.id}
+                  onWriting={onWriting}
+                />
+              )}
+            </div>
+          ) : (
+            <button type="button" className="room-view__folded" onClick={() => toggle('canvas')}>
+              <Icon name="layout" size={15} /> Canvas · {nodes?.length ?? 0} {nodes?.length === 1 ? 'thing' : 'things'} on it
+              <span className="room-view__folded-hint">Show</span>
+            </button>
+          )}
+          {show.canvas && show.chat && (
+            <div className="room-view__split" role="separator" aria-orientation="horizontal" aria-label="Drag to resize the chat" onPointerDown={startResize} />
+          )}
+          {show.chat ? (
+            <div className="room-view__chat" style={show.canvas ? { height: chatHeight } : undefined}>
+              {room.pending ? <div className="room-view__loading">Setting up the Room…</div> : <RoomChat hub={hub} room={room} user={user} access={access} members={members} roleOf={roleOf} onSignIn={onSignIn} />}
+            </div>
+          ) : (
+            <button type="button" className="room-view__folded" onClick={() => toggle('chat')}>
+              <Icon name="message" size={15} /> Chat{unreadChat ? ' · new messages' : ''}
+              <span className="room-view__folded-hint">Show</span>
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function readLayout() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mimyne.roomLayout'));
+    if (saved && (saved.canvas || saved.chat)) return { canvas: !!saved.canvas, chat: !!saved.chat };
+  } catch {
+    // Nothing saved.
+  }
+  return { canvas: true, chat: true };
+}
+
+function readChatHeight() {
+  try {
+    const h = Number(localStorage.getItem('mimyne.chatHeight'));
+    if (h >= 140 && h <= 1200) return h;
+  } catch {
+    // Nothing saved.
+  }
+  return 280;
+}
+
+/** Keeps you on the Hub's "here" list while you're in its Rooms (unless you're invisible). */
+function useHere(hubId, user, roomId, writing) {
   const [here, setHere] = useState({});
   const [mode, setMode] = useState(null);
   useEffect(() => watchHere(hubId, setHere), [hubId]);
@@ -182,7 +472,7 @@ function useHere(hubId, user, roomId) {
       leaveHere(hubId, user.uid);
       return undefined;
     }
-    const beat = () => document.visibilityState === 'visible' && stampHere(hubId, user.uid, roomId);
+    const beat = () => document.visibilityState === 'visible' && stampHere(hubId, user.uid, roomId ?? undefined, writing);
     beat();
     const timer = setInterval(beat, 60_000);
     document.addEventListener('visibilitychange', beat);
@@ -190,102 +480,61 @@ function useHere(hubId, user, roomId) {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', beat);
     };
-  }, [hubId, user?.uid, mode, roomId]);
+  }, [hubId, user?.uid, mode, roomId, writing]);
   // Leaving the Hub takes you off the list at once.
   useEffect(() => () => user && leaveHere(hubId, user.uid), [hubId, user?.uid]);
   return here;
 }
 
-function People({ hub, members, roles, roleOf, here, rooms }) {
-  const hereIds = Object.keys(here);
-  const groups = useMemo(() => {
-    const byRole = new Map(roles.map((r) => [r.id, []]));
-    const loose = [];
-    for (const m of members) {
-      if (here[m.uid] !== undefined) continue;
-      (byRole.get(m.role) ?? loose).push(m);
-    }
-    return [...roles].sort((a, b) => a.order - b.order).map((r) => ({ role: r, people: byRole.get(r.id) })).filter((g) => g.people.length)
-      .concat(loose.length ? [{ role: null, people: loose }] : []);
-  }, [members, roles, here]);
-  const roomName = (id) => rooms.find((r) => r.id === id)?.name;
+// ------------------------------------------------------------ settings
 
-  return (
-    <aside className="rooms__people" aria-label="People">
-      <h3 className="rooms__people-head">
-        <span className="rooms__live-dot" aria-hidden="true" /> Here now — {hereIds.length}
-      </h3>
-      {hereIds.length === 0 && <p className="muted rooms__people-none">Nobody's in the Rooms right now.</p>}
-      <ul>
-        {hereIds.map((uid) => (
-          <PersonRow key={uid} uid={uid} name={members.find((m) => m.uid === uid)?.name} role={roleOf(uid)} note={roomName(here[uid]) && `in #${roomName(here[uid])}`} live />
-        ))}
-      </ul>
-      {groups.map(({ role, people }) => (
-        <div key={role?.id ?? 'loose'}>
-          <h3 className="rooms__people-head">
-            {role?.name ?? 'Pledged'} — {people.length}
-          </h3>
-          <ul>
-            {people.slice(0, 80).map((m) => (
-              <PersonRow key={m.uid} uid={m.uid} name={m.name} role={role} />
-            ))}
-          </ul>
-          {people.length > 80 && <p className="muted rooms__people-none">and {people.length - 80} more</p>}
-        </div>
-      ))}
-      <p className="rooms__people-foot muted">{hub.visibility === 'public' ? 'Anyone can read this Hub’s Rooms.' : 'Only people in this Hub can read its Rooms.'}</p>
-    </aside>
-  );
-}
-
-function PersonRow({ uid, name, role, note, live = false }) {
-  const person = usePerson(uid, name);
-  return (
-    <li className={`rooms__person ${live ? 'is-live' : ''}`}>
-      <a href={`/people/${uid}`} className="rooms__person-link">
-        <span className="rooms__person-pic">
-          <Avatar person={person} size={32} />
-          {live && <span className="rooms__person-dot" aria-hidden="true" />}
-        </span>
-        <span className="rooms__person-text">
-          <span className="rooms__person-name" style={role?.level !== 'member' && role?.color ? { color: role.color } : undefined}>
-            {person.name}
-          </span>
-          {note && <span className="rooms__person-note">{note}</span>}
-        </span>
-      </a>
-    </li>
-  );
-}
-
-function RoomDialog({ hub, room, count, user, onMove, onClose, onMade }) {
+function RoomDialog({ hub, room, rooms, roles, user, onClose, onMade, onDeleted }) {
   const [name, setName] = useState(room?.name ?? '');
+  const [tag, setTag] = useState(room?.tag ?? '');
   const [topic, setTopic] = useState(room?.topic ?? '');
   const [kind, setKind] = useState(room?.kind ?? 'chat');
+  const [acc, setAcc] = useState(room?.access ?? { view: 'everyone', add: 'everyone', edit: 'pledged' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const options = (what) => [
+    { id: 'everyone', label: what === 'view' ? (hub.visibility === 'public' ? 'Anyone' : 'Everyone in the Hub') : 'Anyone who can post here' },
+    { id: 'pledged', label: 'Pledged people' },
+    { id: 'mods', label: cap(whoLabel('mods', roles)) },
+    { id: 'owner', label: `Only ${whoLabel('owner', roles)}` },
+  ];
 
   async function save(event) {
     event.preventDefault();
-    if (!roomName(name)) return setError('Give the Room a name.');
+    if (!name.trim()) return setError('Give the Room a name.');
     setBusy(true);
     setError(null);
     try {
-      if (room) await updateRoom(hub.id, room, { name, topic, kind });
-      else onMade(await createRoom(hub.id, { name, topic, kind, order: Math.min(99, count) }, user.uid));
+      const fields = { name, tag: tag || name, topic, kind, access: acc };
+      if (room) await updateRoom(hub.id, room, fields);
+      else onMade(await createRoom(hub.id, { ...fields, order: Math.min(99, rooms.length) }, user.uid));
       onClose();
-    } catch {
-      setError("That didn't save. Only the owner and mods set up Rooms.");
+    } catch (err) {
+      setError(err.message?.startsWith('Give') ? err.message : "That didn't save. Only the owner and mods set up Rooms.");
       setBusy(false);
     }
   }
 
+  async function move(by) {
+    const list = [...rooms];
+    const i = list.findIndex((r) => r.id === room.id);
+    const j = i + by;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    await Promise.all(list.map((r, order) => (r.order === order ? null : updateRoom(hub.id, r, { order })))).catch(() => setError("The Rooms couldn't be reordered."));
+  }
+
   async function remove() {
-    if (!window.confirm(`Delete #${room.name}? Its messages go with it.`)) return;
+    if (!window.confirm(`Delete ${room.name}? Its canvas and chat go with it.`)) return;
     setBusy(true);
     try {
       await deleteRoom(hub.id, room.id);
+      onDeleted();
       onClose();
     } catch {
       setError("The Room couldn't be deleted.");
@@ -294,39 +543,51 @@ function RoomDialog({ hub, room, count, user, onMove, onClose, onMade }) {
   }
 
   return (
-    <Dialog title={room ? `Edit #${room.name}` : 'New Room'} onClose={onClose} width={460}>
+    <Dialog title={room ? `${room.name} settings` : 'New Room'} onClose={onClose} width={520}>
       <form className="room-form" onSubmit={save}>
-        <div className="room-form__kinds" role="radiogroup" aria-label="Kind of Room">
-          {[
-            { id: 'chat', icon: 'hash', title: 'Chat', note: 'Everyone who can post here talks.' },
-            { id: 'announce', icon: 'megaphone', title: 'Announcements', note: 'Only the owner and mods post. Everyone reads.' },
-          ].map((k) => (
-            <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} className={`room-form__kind ${kind === k.id ? 'is-on' : ''}`} onClick={() => setKind(k.id)}>
-              <Icon name={k.icon} size={20} />
-              <span>
-                <strong>{k.title}</strong>
-                <span className="muted">{k.note}</span>
-              </span>
-            </button>
-          ))}
+        <div className="room-form__row">
+          <label className="field room-form__grow">
+            Name
+            <input className="field__input" value={name} maxLength={60} placeholder="Level design" onChange={(e) => setName(e.target.value)} autoFocus />
+          </label>
+          <label className="field room-form__tag">
+            Tag
+            <span className="room-form__name">
+              <Icon name="hash" size={14} />
+              <input className="field__input" value={tag} maxLength={32} placeholder={roomName(name) || 'maps'} onChange={(e) => setTag(e.target.value.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, ''))} />
+            </span>
+          </label>
         </div>
         <label className="field">
-          Name
-          <span className="room-form__name">
-            <Icon name={kind === 'announce' ? 'megaphone' : 'hash'} size={16} />
-            <input className="field__input" value={name} maxLength={32} placeholder="new-room" onChange={(e) => setName(e.target.value.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, ''))} autoFocus />
-          </span>
+          What it's for
+          <input className="field__input" value={topic} maxLength={200} placeholder="Maps, blockouts and playtest notes" onChange={(e) => setTopic(e.target.value)} />
         </label>
-        <label className="field">
-          Topic
-          <input className="field__input" value={topic} maxLength={200} placeholder="What's this Room for?" onChange={(e) => setTopic(e.target.value)} />
+        <fieldset className="room-form__access">
+          <legend>Who can</legend>
+          {[
+            { key: 'view', label: 'See inside' },
+            { key: 'add', label: 'Add notes and files' },
+            { key: 'edit', label: 'Edit and move everything' },
+          ].map((row) => (
+            <label key={row.key} className="room-form__access-row">
+              <span>{row.label}</span>
+              <select value={acc[row.key]} onChange={(e) => setAcc((a) => ({ ...a, [row.key]: e.target.value }))}>
+                {options(row.key).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </label>
+          ))}
+          <p className="muted room-form__hint">People who add notes can always change and remove their own.</p>
+        </fieldset>
+        <label className="room-form__check">
+          <input type="checkbox" checked={kind === 'announce'} onChange={(e) => setKind(e.target.checked ? 'announce' : 'chat')} />
+          <span>Only {whoLabel('mods', roles)} post in its chat</span>
         </label>
         {error && <p className="form-error">{error}</p>}
         <div className="room-form__actions">
           {room && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => onMove(-1)} aria-label="Move up">↑</Button>
-              <Button variant="ghost" size="sm" onClick={() => onMove(1)} aria-label="Move down">↓</Button>
+              <Button variant="ghost" size="sm" onClick={() => move(-1)} aria-label="Move earlier">↑</Button>
+              <Button variant="ghost" size="sm" onClick={() => move(1)} aria-label="Move later">↓</Button>
               <Button variant="ghost" size="sm" icon="trash" onClick={remove} disabled={busy}>Delete</Button>
             </>
           )}
