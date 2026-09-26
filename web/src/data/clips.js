@@ -23,7 +23,8 @@ export function watchClips(hubId, onChange, onError) {
         source: ['medal', 'file', 'link'].includes(c.source) ? c.source : 'link',
         title: text(c.title, 120),
         game: text(c.game, 60),
-        url: text(c.url, 500) || null,
+        // Only web links: a clip's link goes straight into an <a href>.
+        url: /^https:\/\//.test(text(c.url, 500)) ? text(c.url, 500) : null,
         thumb: text(c.thumb, 1000) || null,
         seconds: Number(c.seconds) || 0,
         file: c.file ? cleanFiles([c.file])[0] ?? null : null,

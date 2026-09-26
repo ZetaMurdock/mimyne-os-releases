@@ -367,7 +367,7 @@ export function objectsToCsv(data) {
   return [names.map(cell).join(','), ...rows.map((r) => names.map((n) => cell(r[n])).join(','))].join('\r\n') + '\r\n';
 }
 
-const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function inline(s) {
   return escapeHtml(s)

@@ -59,7 +59,20 @@ const router = createBrowserRouter([
   },
 ]);
 
-createRoot(document.getElementById('root')).render(
+// mimyne.com never runs inside another site's frame, where a hidden page
+// could trick someone into clicking (GitHub Pages can't send the headers
+// that forbid framing).
+const framed = (() => {
+  try {
+    return window.top !== window.self;
+  } catch {
+    return true;
+  }
+})();
+
+if (framed) {
+  document.getElementById('root').innerHTML = '<p style="padding:24px;font:15px system-ui;color:#fff">Mimyne can\'t be shown inside another page. <a href="https://mimyne.com/" target="_top" rel="noopener" style="color:#c4b5fd">Open mimyne.com</a></p>';
+} else createRoot(document.getElementById('root')).render(
   <StrictMode>
     <SessionProvider>
       <RouterProvider router={router} />
