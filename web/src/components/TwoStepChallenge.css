@@ -1,0 +1,39 @@
+.two-step {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.two-step__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.two-step__choice {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  background: none;
+  color: var(--text-2);
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.two-step__choice.is-on {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.two-step__code {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.two-step__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}

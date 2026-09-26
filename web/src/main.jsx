@@ -42,6 +42,9 @@ const router = createBrowserRouter([
                 { path: 'messages/:id', lazy: page(() => import('./pages/Messages.jsx')) },
                 { path: 'staff/reports', lazy: page(() => import('./pages/Reports.jsx')) },
                 { path: 'pricing', lazy: page(() => import('./pages/Pricing.jsx')) },
+                { path: 'settings/security', lazy: page(() => import('./pages/Security.jsx')) },
+                { path: 'security/recover', lazy: page(() => import('./pages/Recover.jsx')) },
+                { path: 'security/confirm', lazy: page(() => import('./pages/SecurityLink.jsx')) },
               ]
             : []),
           { path: '*', element: <NotFound /> },
