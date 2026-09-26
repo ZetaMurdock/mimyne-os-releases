@@ -5,6 +5,11 @@ import Layout from './components/Layout.jsx';
 import Home from './pages/Home.jsx';
 import NotFound from './pages/NotFound.jsx';
 import { SessionProvider } from './data/session.jsx';
+// Fonts are served from mimyne.com itself, not Google Fonts, so a visit
+// doesn't send anyone's address to Google (all three are SIL Open Font License).
+import '@fontsource-variable/bricolage-grotesque/opsz.css';
+import '@fontsource-variable/geist/wght.css';
+import '@fontsource/jetbrains-mono/500.css';
 import './styles/tokens.css';
 import './styles/base.css';
 
