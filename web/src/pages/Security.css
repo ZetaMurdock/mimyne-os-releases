@@ -1,0 +1,232 @@
+/* mimyne.com/settings/security, and the recovery pages: quiet, like pricing. */
+
+.security {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: min(640px, 100% - 32px);
+  margin: 104px auto 72px;
+}
+
+.security__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.security__title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.security__banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.security__section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+
+.security__section .muted {
+  font-size: 13.5px;
+}
+
+.security__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.security__row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.security__h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.security__address {
+  overflow-wrap: anywhere;
+}
+
+.security__state {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.security__state.is-on {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.security__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.security__item-text {
+  display: flex;
+  flex-grow: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.security__item-text .muted {
+  font-size: 12.5px;
+}
+
+.security__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.security__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  font-size: 14px;
+}
+
+.security__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 18px;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.security__qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.security__qr img {
+  border-radius: 8px;
+  background: #fff;
+}
+
+.security__key {
+  max-width: 100%;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.security__code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.security__code .field {
+  flex: 1 1 220px;
+}
+
+.security__count,
+.security__pending {
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.security__codes {
+  padding: 22px;
+  border: 1px solid var(--text-3);
+  border-radius: var(--r-card);
+}
+
+.security__code-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.security__code-list code {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
+.security__tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+}
+
+.security__tabs button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.security__tabs button.is-on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.security__done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .security {
+    margin-top: 88px;
+  }
+
+  .security__row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .security__code-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

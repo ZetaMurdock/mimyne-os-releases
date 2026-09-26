@@ -20,7 +20,7 @@ const TYPES = { png: 'image/png', txt: 'text/plain', csv: 'text/csv', md: 'text/
  * The files Worker, in memory. `storage` is what /usage answers and what an
  * upload is checked against: { used, limit }.
  */
-async function fakeWorker(context, storage) {
+async function fakeWorker(context, storage, security) {
   const store = new Map();
   await context.route(`${WORKER}/**`, async (route) => {
     const req = route.request();
@@ -31,6 +31,7 @@ async function fakeWorker(context, storage) {
     const uid = token ? JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).user_id : null;
     const reply = (json, status = 200) => route.fulfill({ status, headers: cors, json });
 
+    if (url.pathname.startsWith('/security')) return reply(...fakeSecurity(security, req.method(), url.pathname, req.postDataJSON?.() ?? null));
     if (url.pathname === '/usage') return uid ? reply({ used: storage.used, limit: storage.limit, files: 0, paid: false }) : reply({ error: 'sign-in-required' }, 401);
     if (url.pathname === '/uploads') {
       const { name, size } = req.postDataJSON();
@@ -60,6 +61,29 @@ async function fakeWorker(context, storage) {
     }
     return reply({ error: 'not-found' }, 404);
   });
+}
+
+/**
+ * The file service's 2-step recovery (files-worker/src/security.js), in
+ * memory: `security` is { twoStep, codesLeft, recovery, pending, calls }.
+ */
+function fakeSecurity(security, method, path, body) {
+  security.calls.push([method, path, body]);
+  if (method === 'GET' && path === '/security') {
+    return [{ twoStep: security.twoStep, codesLeft: security.codesLeft, codesMadeAt: null, recovery: security.recovery, pending: security.pending, emailReady: true }];
+  }
+  if (path === '/security/codes') {
+    security.codesLeft = 10;
+    return [{ codes: Array.from({ length: 10 }, (_, i) => `abcd${i}-efgh${i}`) }];
+  }
+  if (method === 'POST' && path === '/security/recovery-email') {
+    security.pending = body.email;
+    return [{ ok: true, pending: body.email }];
+  }
+  if (path === '/security/recover') {
+    return body.code === 'abcd0-efgh0' ? [{ ok: true, done: 'recovered' }] : [{ error: 'wrong-code', message: "That code didn't work. Check it, or use your recovery email." }, 400];
+  }
+  return [{ ok: true }];
 }
 
 /** Signs a new person up through the site: { page, email, username, uid }. */
@@ -97,6 +121,21 @@ export async function uidOf(email) {
   return (await res.json()).userInfo.find((u) => u.email === email)?.localId;
 }
 
+/** Marks an account's email as verified, as clicking the emailed link would. */
+export async function verifyEmail(uid) {
+  const res = await fetch(`${AUTH}/accounts:update`, {
+    method: 'POST', headers: { authorization: 'Bearer owner', 'content-type': 'application/json' }, body: JSON.stringify({ localId: uid, emailVerified: true }),
+  });
+  if (!res.ok) throw new Error(`verify ${uid}: ${res.status} ${await res.text()}`);
+}
+
+/** The last code the emulator "texted" to a phone number. */
+export async function textedCode(phoneNumber) {
+  const res = await fetch('http://127.0.0.1:9099/emulator/v1/projects/mimyne-os/verificationCodes');
+  const codes = (await res.json()).verificationCodes ?? [];
+  return codes.filter((c) => c.phoneNumber === phoneNumber).at(-1)?.code;
+}
+
 /** Writes a document straight into the emulator, past the rules. */
 export async function seed(path, fields) {
   const res = await fetch(`${EMULATOR}/${path}`, {
@@ -118,16 +157,18 @@ export async function makeHub(page, name, slug) {
 export const test = base.extend({
   // What /usage reports; tests change it before uploading.
   storage: async ({}, use) => use({ used: 0, limit: 5 * 1024 ** 3 }),
+  // What the file service's /security routes hold, shared by everyone's browser.
+  security: async ({}, use) => use({ twoStep: true, codesLeft: 0, recovery: null, pending: null, calls: [] }),
 
   // `person('name')` gives a signed-up person in a browser of their own.
   // Anything the page throws fails the test.
-  person: async ({ browser, storage }, use) => {
+  person: async ({ browser, storage, security }, use) => {
     const contexts = [];
     const errors = [];
     await use(async (name) => {
       const context = await browser.newContext();
       contexts.push(context);
-      await fakeWorker(context, storage);
+      await fakeWorker(context, storage, security);
       const page = await context.newPage();
       page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
       return signUp(page, `${name}_${tag()}`);

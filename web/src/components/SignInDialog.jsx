@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
+import { TWO_STEP_REQUIRED } from '../lib/security.js';
 import Button from './Button.jsx';
 import Dialog from './Dialog.jsx';
+
+const TwoStepChallenge = lazy(() => import('./TwoStepChallenge.jsx'));
+
+// New passwords; the project's password policy asks for the same.
+export const MIN_PASSWORD = 10;
 
 const nice = (error) => {
   const code = error?.code ?? '';
   if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return "That email and password don't match an account.";
   if (code === 'auth/email-already-in-use') return 'That email already has an account. Sign in instead.';
-  if (code === 'auth/weak-password') return 'Use at least 6 characters for the password.';
+  if (code === 'auth/weak-password' || code === 'auth/password-does-not-meet-requirements') return `Use at least ${MIN_PASSWORD} characters for the password.`;
   if (code === 'auth/account-exists-with-different-credential') return 'That email signs in another way. Use the one you signed up with.';
   if (code === 'auth/popup-blocked') return 'Your browser blocked the sign-in window. Allow pop-ups for mimyne.com and try again.';
   return String(error?.message ?? error).replace('Firebase: ', '');
@@ -19,6 +25,17 @@ export default function SignInDialog({ onClose }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
+  // Set when the account has 2-step verification on: Firebase is waiting for the code.
+  const [twoStep, setTwoStep] = useState(null);
+
+  /** True when the error was "now the second step", and shows it. */
+  async function secondStep(err) {
+    if (err?.code !== TWO_STEP_REQUIRED) return false;
+    const [{ getMultiFactorResolver }, { auth }] = await Promise.all([import('firebase/auth'), import('../lib/firebase.js')]);
+    setTwoStep(getMultiFactorResolver(auth, err));
+    setBusy(null);
+    return true;
+  }
 
   async function withProvider(which) {
     setBusy(which);
@@ -29,6 +46,7 @@ export default function SignInDialog({ onClose }) {
       await signInWithPopup(auth, which === 'google' ? googleProvider : microsoftProvider);
       onClose();
     } catch (err) {
+      if (await secondStep(err)) return;
       if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') setError(nice(err));
       setBusy(null);
     }
@@ -36,8 +54,12 @@ export default function SignInDialog({ onClose }) {
 
   async function withEmail(event) {
     event.preventDefault();
-    setBusy('email');
     setError(null);
+    if (mode === 'register' && password.length < MIN_PASSWORD) {
+      setError(`Use at least ${MIN_PASSWORD} characters for the password.`);
+      return;
+    }
+    setBusy('email');
     const { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } = await import('firebase/auth');
     const { auth } = await import('../lib/firebase.js');
     try {
@@ -50,9 +72,20 @@ export default function SignInDialog({ onClose }) {
       }
       onClose();
     } catch (err) {
+      if (await secondStep(err)) return;
       setError(nice(err));
       setBusy(null);
     }
+  }
+
+  if (twoStep) {
+    return (
+      <Dialog title="2-step verification" onClose={onClose}>
+        <Suspense fallback={null}>
+          <TwoStepChallenge resolver={twoStep} onDone={onClose} onBack={() => setTwoStep(null)} />
+        </Suspense>
+      </Dialog>
+    );
   }
 
   return (
@@ -76,7 +109,7 @@ export default function SignInDialog({ onClose }) {
             className="field__input"
             type="password"
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-            minLength={6}
+            minLength={mode === 'register' ? MIN_PASSWORD : undefined}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
