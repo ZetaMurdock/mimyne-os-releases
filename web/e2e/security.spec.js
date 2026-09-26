@@ -110,3 +110,12 @@ test('someone who lost their phone gets back in with a backup code', async ({ pa
   await page.getByRole('button', { name: 'Turn off 2-step verification' }).click();
   await expect(page.getByRole('status')).toContainText('2-step verification is off');
 });
+
+test("mimyne.com won't run inside another site's frame", async ({ page }) => {
+  await page.goto('/');
+  await page.setContent('<iframe src="http://127.0.0.1:5173/pricing" width="800" height="400"></iframe>');
+  const framed = page.frameLocator('iframe');
+  await expect(framed.getByText("Mimyne can't be shown inside another page.")).toBeVisible();
+  await expect(framed.getByRole('link', { name: 'Open mimyne.com' })).toHaveAttribute('target', '_top');
+  await expect(framed.getByRole('heading', { name: /Start free/ })).toHaveCount(0);
+});

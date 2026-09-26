@@ -133,7 +133,7 @@ function PageCard({ url }) {
   if (info?.media === 'audio') return <audio className="linkp__audio" src={url} controls preload="metadata" />;
   const site = info?.siteName || hostOf(url);
   return (
-    <a className="linkp__card" href={url} target="_blank" rel="noopener noreferrer nofollow" style={info?.themeColor ? { '--linkp-edge': info.themeColor } : undefined}>
+    <a className="linkp__card" href={url} target="_blank" rel="noopener noreferrer nofollow" style={/^#[0-9a-f]{3,8}$/i.test(info?.themeColor ?? '') ? { '--linkp-edge': info.themeColor } : undefined}>
       <span className="linkp__text">
         <span className="linkp__site">
           {info?.icon && <img src={info.icon} alt="" className="linkp__icon" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />}

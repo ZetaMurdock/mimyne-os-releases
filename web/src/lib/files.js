@@ -1,9 +1,12 @@
 // Files go to Mimyne's file service (files-worker in the app's repo), which
 // checks the sign-in, puts them in the uploader's own folder in Backblaze,
 // and hands out short-lived download links.
-import { auth } from './firebase.js';
+import { STAGING, auth } from './firebase.js';
 
-export const FILES_URL = import.meta.env.VITE_FILES_URL ?? 'https://mimyne-os.despits-tyrek.workers.dev';
+// A staging build must name its own file service (VITE_FILES_URL): without
+// one it points nowhere, never at the live one with staging sign-ins.
+export const FILES_URL = import.meta.env.VITE_FILES_URL
+  || (STAGING ? 'https://files-not-configured.invalid' : 'https://mimyne-os.despits-tyrek.workers.dev');
 
 const MESSAGES = {
   'paid-tier': 'Files this large need the paid tier.',

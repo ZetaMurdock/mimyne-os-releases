@@ -22,12 +22,15 @@ export const newId = (prefix = 'n') => `${prefix}-${Date.now().toString(36)}${Ma
 const nodesOf = (hubId, roomId) => collection(db, 'hubs', hubId, 'rooms', roomId, 'nodes');
 const edgesOf = (hubId, roomId) => collection(db, 'hubs', hubId, 'rooms', roomId, 'edges');
 
+// Colours go into styles and SVG, so only a plain #hex colour is kept.
+const HEX = /^#[0-9a-f]{3,8}$/i;
+
 function cleanStyle(style) {
   if (!style || typeof style !== 'object') return {};
   const out = {};
   if (typeof style.width === 'number') out.width = Math.min(4000, Math.max(20, style.width));
   if (typeof style.height === 'number') out.height = Math.min(4000, Math.max(20, style.height));
-  if (typeof style.color === 'string') out.color = style.color.slice(0, 20);
+  if (typeof style.color === 'string' && HEX.test(style.color)) out.color = style.color;
   if (SHAPES.includes(style.shape)) out.shape = style.shape;
   if (typeof style.fill === 'boolean') out.fill = style.fill;
   return out;
@@ -58,7 +61,7 @@ export function cleanEdge(id, d) {
     label: text(d.label, 200),
     head: ['end', 'both', 'none'].includes(d.head) ? d.head : 'end',
     dash: d.dash === true,
-    color: text(d.color, 20) || null,
+    color: HEX.test(text(d.color, 20)) ? text(d.color, 20) : null,
     by: text(d.by, 128),
   };
 }
