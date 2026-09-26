@@ -805,3 +805,8 @@
   border-radius: 8px;
   font-weight: 500;
 }
+
+.tile__error {
+  color: #fca5a5;
+  font-size: 12px;
+}

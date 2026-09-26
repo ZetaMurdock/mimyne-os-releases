@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
 import Button from './Button.jsx';
-import { downloadFile, fileLink } from '../lib/files.js';
+import { fileLink } from '../lib/files.js';
+import { fileRisk } from '../lib/fileSafety.js';
+import { useSafeDownload } from './useSafeDownload.jsx';
 import { formatBytes, FREE_FILE_LIMIT, PAID_TIER_NAME } from '../lib/format.js';
 import './FileCard.css';
 
@@ -47,20 +49,9 @@ export function FileCard({ file, locked = false, compact = false, onNeedAccount 
 }
 
 function Card({ file, locked = false, compact = false, onNeedAccount }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-
-  async function download() {
-    setBusy(true);
-    setError(null);
-    try {
-      await downloadFile(file.path);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { start, busy, error, dialog } = useSafeDownload();
+  const runs = fileRisk(file.name).runs;
+  const download = () => start(file);
 
   return (
     <div className={`file-card ${compact ? 'file-card--compact' : ''}`}>
@@ -69,7 +60,9 @@ function Card({ file, locked = false, compact = false, onNeedAccount }) {
       </span>
       <span className="file-card__text">
         <span className="file-card__name">{file.name}</span>
-        <span className={error ? 'file-card__error' : 'file-card__meta'}>{error ?? formatBytes(file.size)}</span>
+        <span className={error ? 'file-card__error' : 'file-card__meta'}>
+          {error ?? (runs ? `${formatBytes(file.size)} · Can run programs` : formatBytes(file.size))}
+        </span>
       </span>
       {locked ? (
         <button type="button" className="file-card__locked" onClick={onNeedAccount}>
@@ -80,6 +73,7 @@ function Card({ file, locked = false, compact = false, onNeedAccount }) {
           Download
         </Button>
       )}
+      {dialog}
     </div>
   );
 }

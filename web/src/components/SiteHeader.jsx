@@ -8,7 +8,7 @@ import './SiteHeader.css';
 // Signed out, the site has a plain header. Signing in swaps it for the notch.
 export default function SiteHeader({ home = false }) {
   const { signIn } = useSession();
-  const download = useWindowsDownload();
+  const { href: download } = useWindowsDownload();
 
   return (
     <header className="site-header">

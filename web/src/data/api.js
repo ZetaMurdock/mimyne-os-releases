@@ -35,7 +35,10 @@ function cleanHub(id, data) {
 export function cleanFiles(files) {
   return (Array.isArray(files) ? files : [])
     .filter((f) => f && typeof f.path === 'string' && typeof f.name === 'string')
-    .map((f) => ({ name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path, display: f.display !== false }));
+    .map((f) => ({
+      name: text(f.name, 200), size: Number(f.size) || 0, type: text(f.type, 100), path: f.path, display: f.display !== false,
+      ...(/^[0-9a-f]{64}$/.test(f.sha256 ?? '') ? { sha256: f.sha256 } : {}),
+    }));
 }
 
 export function cleanPost(scope, id, data) {

@@ -3,6 +3,7 @@
  * for the files Worker, and a back door to the emulators for setting up what
  * the site itself can't (making someone staff).
  */
+import { createHash } from 'node:crypto';
 import { test as base, expect } from '@playwright/test';
 
 export { expect };
@@ -21,7 +22,10 @@ const TYPES = { png: 'image/png', txt: 'text/plain', csv: 'text/csv', md: 'text/
  * upload is checked against: { used, limit }.
  */
 async function fakeWorker(context, storage, security) {
-  const store = new Map();
+  // Shared by everyone's browser in a test, so a test can reach in and change
+  // a stored file (storage.files: path → bytes).
+  storage.files ??= new Map();
+  const store = storage.files;
   await context.route(`${WORKER}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -46,7 +50,7 @@ async function fakeWorker(context, storage, security) {
       const bytes = req.postDataBuffer() ?? Buffer.alloc(0);
       store.set(path, bytes);
       storage.used += bytes.length;
-      return reply({ path });
+      return reply({ path, sha256: createHash('sha256').update(bytes).digest('hex') });
     }
     if (url.pathname === '/downloads') {
       const { path } = req.postDataJSON();
