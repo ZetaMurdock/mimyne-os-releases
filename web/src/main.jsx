@@ -41,6 +41,7 @@ const router = createBrowserRouter([
                 { path: 'messages', lazy: page(() => import('./pages/Messages.jsx')) },
                 { path: 'messages/:id', lazy: page(() => import('./pages/Messages.jsx')) },
                 { path: 'staff/reports', lazy: page(() => import('./pages/Reports.jsx')) },
+                { path: 'pricing', lazy: page(() => import('./pages/Pricing.jsx')) },
               ]
             : []),
           { path: '*', element: <NotFound /> },

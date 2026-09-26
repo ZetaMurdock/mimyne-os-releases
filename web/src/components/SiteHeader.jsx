@@ -16,6 +16,7 @@ export default function SiteHeader({ home = false }) {
         Mimyne
       </Link>
       <nav className="site-header__nav" aria-label="Site">
+        {SOCIAL && <Link to="/pricing">Pricing</Link>}
         <a href="/guidelines.html">Guidelines</a>
       </nav>
       <span className="site-header__spacer" />
