@@ -1,0 +1,307 @@
+/* mimyne.com/pricing: quiet, mostly type and thin lines. */
+
+.pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 72px;
+  width: min(1080px, 100% - 32px);
+  margin: 112px auto 72px;
+}
+
+.pricing__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.pricing__title {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.pricing__lead {
+  color: var(--text-3);
+  font-size: 15px;
+}
+
+.pricing__toggle {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 12px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+}
+
+.pricing__toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.pricing__toggle button.is-on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.pricing__save {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.pricing__mine {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+  font-size: 13px;
+}
+
+.pricing__mine p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pricing__manage {
+  margin-left: 8px;
+  color: var(--text-2);
+  text-decoration: underline;
+}
+
+/* Four plans in one row, divided by hairlines rather than boxed. */
+.pricing__plans {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px 24px;
+}
+
+.pricing__plans .plan + .plan {
+  border-left: 1px solid var(--border);
+}
+
+.plan__name {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.plan--featured .plan__name {
+  color: var(--text);
+}
+
+.plan__price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.plan__amount {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan__per {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.plan__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+  list-style: none;
+}
+
+.plan__action {
+  display: flex;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.plan__action .btn {
+  flex-grow: 1;
+  justify-content: center;
+}
+
+.plan__soon {
+  flex-grow: 1;
+  padding: 8px 0;
+  color: var(--text-3);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.pricing__h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pricing__compare {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pricing__table-wrap {
+  overflow-x: auto;
+}
+
+.pricing__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.pricing__table th,
+.pricing__table td {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.pricing__table th + td,
+.pricing__table td + td {
+  padding-left: 24px;
+}
+
+.pricing__table thead th {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.pricing__table thead th + th {
+  padding-left: 24px;
+}
+
+.pricing__table tbody th {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.pricing__table td:nth-child(2) {
+  color: var(--text-3);
+}
+
+.pricing__fine {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.pricing__legal {
+  text-align: center;
+}
+
+.pricing__legal a {
+  color: var(--text-2);
+  text-decoration: underline;
+}
+
+.pricing__hub {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 32px;
+  align-items: start;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.pricing__hub-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pricing__hub-copy .muted {
+  font-size: 13.5px;
+}
+
+.plan--hub {
+  padding: 0;
+}
+
+.plan__action--hubs {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plan__hub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plan__hub-name {
+  flex-grow: 1;
+  overflow: hidden;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan__hub .btn,
+.plan__hub .plan__soon {
+  flex-grow: 0;
+}
+
+@media (max-width: 900px) {
+  .pricing__plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pricing__plans .plan:nth-child(3) {
+    border-left: 0;
+  }
+
+  .pricing__plans .plan:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 600px) {
+  .pricing {
+    gap: 56px;
+    margin-top: 88px;
+  }
+
+  .pricing__plans,
+  .pricing__hub {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pricing__plans .plan + .plan {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+.plan__action--hubs .muted {
+  font-size: 13.5px;
+}

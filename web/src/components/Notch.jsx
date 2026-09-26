@@ -222,6 +222,7 @@ function Notch() {
         >
           <MenuItem as={Link} to={`/u/${encodeURIComponent(user.username)}`}>Your profile</MenuItem>
           <MenuItem as={Link} to="/hubs/new">Start a Hub</MenuItem>
+          <MenuItem as={Link} to="/pricing">Plans and pricing</MenuItem>
           {staff && <MenuItem as={Link} to="/staff/reports">Reports</MenuItem>}
           <MenuItem onClick={signOut}>Sign out</MenuItem>
         </Menu>
