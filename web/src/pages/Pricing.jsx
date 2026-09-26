@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import Button from '../components/Button.jsx';
-import Icon from '../components/Icon.jsx';
 import { HubIcon } from '../components/Avatar.jsx';
 import { getHubCards } from '../data/api.js';
 import { watchHubPro, watchMyPlans } from '../data/billing.js';
@@ -28,20 +27,14 @@ export default function Pricing() {
   return (
     <div className="pricing">
       <header className="pricing__hero">
-        <h1 className="pricing__title">
-          Start free.
-          <br />
-          Go deeper when you&apos;re ready.
-        </h1>
-        <p className="pricing__lead">
-          The social side stays free. Choose Deep for your desktop tools, Plus for your everyday social space, or both.
-        </p>
+        <h1 className="pricing__title">Start free. Go deeper when you&apos;re ready.</h1>
+        <p className="pricing__lead">The social side stays free.</p>
         <div className="pricing__toggle" role="radiogroup" aria-label="Billing">
           <button type="button" role="radio" aria-checked={!yearly} className={!yearly ? 'is-on' : ''} onClick={() => setYearly(false)}>
             Monthly
           </button>
           <button type="button" role="radio" aria-checked={yearly} className={yearly ? 'is-on' : ''} onClick={() => setYearly(true)}>
-            Yearly <span className="pricing__save">Plus saves {money(YEARLY_SAVING)}</span>
+            Yearly <span className="pricing__save">−{money(YEARLY_SAVING)}</span>
           </button>
         </div>
       </header>
@@ -53,16 +46,14 @@ export default function Pricing() {
           name="Free + Surface"
           price="$0"
           per="Always free"
-          blurb="Your people and your starting point."
-          items={['Free social account on mimyne.com', 'Notes and writing in the desktop app', 'Surface key, renewed free each year', '5 GB storage · files up to 2 GB']}
-          action={<Button variant="secondary" to="/">Explore Mimyne</Button>}
+          items={['Hubs, Rooms and chat', 'Notes and writing in the app', '5 GB storage']}
+          action={<Button variant="ghost" to="/">Explore</Button>}
         />
         <Plan
           name="Deep"
           price={money(PRICES.deep.amount)}
           per="per year"
-          blurb="The desktop tools behind your next big idea."
-          items={['File writer and API nodes', 'Logic Forge, agents and automations', 'Yearly app license key', 'Plus sold separately']}
+          items={['File writer and API nodes', 'Logic Forge, agents, automations', 'Yearly app key']}
           action={<BuyButton plan="deep" buyer={buyer} have={mine.deep} onSignIn={signIn} label="Get Deep" />}
         />
         <Plan
@@ -70,26 +61,20 @@ export default function Pricing() {
           name="Mimyne Plus"
           price={money(PRICES[plusPlan].amount)}
           per={yearly ? 'per year' : 'per month'}
-          blurb="More space for everything you share."
-          items={['100 GB storage · files up to 25 GB', 'Own up to 10 Hubs', 'Larger canvases and Hub themes', 'Search across all your chats']}
-          note={yearly
-            ? `About ${money(Math.floor((PRICES.plus_yearly.amount / 12) * 100) / 100)}/month, billed yearly.`
-            : `${money(PRICES.plus.amount * 12)} over 12 monthly payments.`}
-          action={<BuyButton plan={plusPlan} buyer={buyer} have={mine.plus} onSignIn={signIn} label="Get Plus" />}
+          items={['100 GB storage, 25 GB files', 'Up to 10 Hubs, bigger canvases', 'Hub themes and chat search']}
+          action={<BuyButton strong plan={plusPlan} buyer={buyer} have={mine.plus} onSignIn={signIn} label="Get Plus" />}
         />
         <Plan
           name="Deep + Plus"
           price={money(PRICES.bundle.amount)}
           per="per year"
-          blurb="Your desktop and social space, together."
-          items={['Everything in Deep', 'Everything in Plus', `Save ${money(BUNDLE_SAVING)} versus separate yearly plans`, 'One yearly subscription']}
+          items={['Everything in Deep', 'Everything in Plus', `Save ${money(BUNDLE_SAVING)} a year`]}
           action={<BuyButton plan="bundle" buyer={buyer} have={mine.deep?.active && mine.plus?.active ? mine.deep : null} onSignIn={signIn} label="Get both" />}
         />
       </section>
 
       <section className="pricing__compare">
-        <h2 className="pricing__h2">What changes with Plus?</h2>
-        <p className="muted">Planned launch benefits, unless marked otherwise. These upgrades are still being built and tested.</p>
+        <h2 className="pricing__h2">Free and Plus</h2>
         <div className="pricing__table-wrap">
           <table className="pricing__table">
             <thead>
@@ -110,23 +95,19 @@ export default function Pricing() {
             </tbody>
           </table>
         </div>
-        <p className="pricing__fine">
-          Conversion size depends on the format and engine. Support for multi-gigabyte conversions is still in development;
-          upload limits do not guarantee conversion support.
-        </p>
+        <p className="pricing__fine">Plus features are planned for launch and still being tested. Conversion size depends on the format.</p>
       </section>
 
       <HubPro buyer={buyer} onSignIn={signIn} />
 
       <p className="pricing__fine pricing__legal">
-        Prices in USD. Tax may be added at checkout depending on where you live. Payments are handled by Lemon Squeezy.
-        See the <a href="/terms.html">Terms of Service</a>.
+        USD. Tax may apply at checkout. Payments by Lemon Squeezy. <a href="/terms.html">Terms</a>
       </p>
     </div>
   );
 }
 
-function Plan({ name, price, per, blurb, items, note, action, featured = false }) {
+function Plan({ name, price, per, items, action, featured = false }) {
   return (
     <article className={`plan ${featured ? 'plan--featured' : ''}`}>
       <h2 className="plan__name">{name}</h2>
@@ -134,23 +115,17 @@ function Plan({ name, price, per, blurb, items, note, action, featured = false }
         <span className="plan__amount">{price}</span>
         <span className="plan__per">{per}</span>
       </p>
-      <p className="plan__blurb">{blurb}</p>
       <ul className="plan__items">
-        {items.map((item) => (
-          <li key={item}>
-            <Icon name="check" size={14} strokeWidth={2.5} />
-            {item}
-          </li>
-        ))}
+        {items.map((item) => <li key={item}>{item}</li>)}
       </ul>
-      {note && <p className="plan__note">{note}</p>}
       <div className="plan__action">{action}</div>
     </article>
   );
 }
 
 /** Buy, sign in to buy, "Available at launch", or what you already have. */
-function BuyButton({ plan, buyer, have, onSignIn, label, hub }) {
+function BuyButton({ plan, buyer, have, onSignIn, label, hub, strong = false }) {
+  const variant = strong ? 'inverse' : 'secondary';
   if (have?.active) {
     return have.portal ? (
       <Button variant="secondary" href={have.portal} icon="check">Yours · Manage</Button>
@@ -159,8 +134,8 @@ function BuyButton({ plan, buyer, have, onSignIn, label, hub }) {
     );
   }
   if (!onSale(plan)) return <span className="plan__soon">Available at launch</span>;
-  if (!buyer) return <Button variant="primary" onClick={onSignIn}>Sign in to buy</Button>;
-  return <Button variant="primary" href={checkoutUrl(plan, { ...buyer, hub })}>{label}</Button>;
+  if (!buyer) return <Button variant={variant} onClick={onSignIn}>Sign in to buy</Button>;
+  return <Button variant={variant} href={checkoutUrl(plan, { ...buyer, hub })}>{label}</Button>;
 }
 
 function YourPlan({ mine }) {
@@ -200,39 +175,27 @@ function HubPro({ buyer, onSignIn }) {
   return (
     <section className="pricing__hub">
       <div className="pricing__hub-copy">
-        <p className="pricing__kicker">For community owners</p>
-        <h2 className="pricing__h2">Your Hub, with room to grow.</h2>
-        <p className="muted">Hub Pro adds capacity and tools to one Hub. It&apos;s separate from your personal Plus subscription.</p>
+        <h2 className="pricing__h2">Hub Pro</h2>
+        <p className="muted">For one Hub you own. Separate from your own Plus.</p>
       </div>
       <article className="plan plan--hub">
-        <h3 className="plan__name">Hub Pro</h3>
         <p className="plan__price">
           <span className="plan__amount">{money(PRICES.hub_pro.amount)}</span>
-          <span className="plan__per">per month, per Hub</span>
+          <span className="plan__per">per month</span>
         </p>
         <ul className="plan__items">
           {[
-            'Up to 5,000 members, compared with 250 free',
-            '50 Rooms, compared with 10 free',
-            '5,000 notes per Room and custom roles',
-            '100 GB of shared Hub storage',
-            'Member and Room activity analytics',
-            'One month of Plus to gift per 25 active members, up to 10 gifts each month',
-          ].map((item) => (
-            <li key={item}>
-              <Icon name="check" size={14} strokeWidth={2.5} />
-              {item}
-            </li>
-          ))}
+            '5,000 members and 50 Rooms (250 and 10 free)',
+            '100 GB shared storage, custom roles',
+            'Activity analytics',
+            'Gift Plus: a month per 25 active members, up to 10 a month',
+          ].map((item) => <li key={item}>{item}</li>)}
         </ul>
-        <p className="plan__note">
-          Active members are unique members who messaged or interacted with the Hub in the previous 7 days.
-        </p>
         <div className="plan__action plan__action--hubs">
           {!onSale('hub_pro') ? (
             <span className="plan__soon">Available at launch</span>
           ) : !buyer ? (
-            <Button variant="primary" onClick={onSignIn}>Sign in to buy</Button>
+            <Button variant="secondary" onClick={onSignIn}>Sign in to buy</Button>
           ) : owned === null ? (
             <span className="muted">Finding your Hubs…</span>
           ) : owned.length === 0 ? (
