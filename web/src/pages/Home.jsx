@@ -11,7 +11,7 @@ const PREVIEW_PEOPLE = [
 ];
 
 export default function Home() {
-  const download = useWindowsDownload();
+  const { href: download, sha256 } = useWindowsDownload();
 
   return (
     <div className="home">
@@ -26,6 +26,14 @@ export default function Home() {
           Get Mimyne for Windows
         </Button>
         <p className="home__small">Windows x64 · Updates itself</p>
+        {sha256 && (
+          <details className="home__verify">
+            <summary>Check the download</summary>
+            <p>Its SHA-256 should be</p>
+            <code>{sha256}</code>
+            <p>In PowerShell: <code>Get-FileHash .\mimyne-os_*_x64-setup.exe</code></p>
+          </details>
+        )}
       </section>
 
       <section className="home__preview" aria-label="A room in Mimyne">

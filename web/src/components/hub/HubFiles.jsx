@@ -7,7 +7,8 @@ import ReportDialog from '../ReportDialog.jsx';
 import { shelveFile, unshelveFile, watchHubFiles } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { convertFile, engineReady, familyOf, stopConverting, targetsFor } from '../../lib/convert.js';
-import { downloadFile, fileLink, myStorage, pullLink, uploadFile } from '../../lib/files.js';
+import { fileLink, myStorage, pullLink, uploadFile } from '../../lib/files.js';
+import { useSafeDownload } from '../useSafeDownload.jsx';
 import { formatBytes, timeAgo } from '../../lib/format.js';
 import './HubFiles.css';
 
@@ -309,9 +310,10 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onReport, onSignIn }
   const targets = targetsFor(file);
   const family = familyOf(file);
 
-  async function download() {
+  const safe = useSafeDownload();
+  function download() {
     if (!user) return onSignIn();
-    await downloadFile(file.path).catch(() => {});
+    safe.start(file);
   }
 
   return (
@@ -327,6 +329,7 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onReport, onSignIn }
             Converted from {item.fromName}
           </span>
         )}
+        {safe.error && <span className="tile__error" role="alert">{safe.error}</span>}
       </div>
       <div className="tile__actions">
         {targets.length > 0 ? (
@@ -348,6 +351,7 @@ function Tile({ item, user, canRemove, onConvert, onRemove, onReport, onSignIn }
           </button>
         )}
       </div>
+      {safe.dialog}
     </li>
   );
 }

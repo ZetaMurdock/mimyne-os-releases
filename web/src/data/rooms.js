@@ -229,7 +229,7 @@ export function watchHubFiles(hubId, onChange, onError) {
 /** Puts one of your uploads on the Hub's shelf; `from` is the file it was converted from. */
 export function shelveFile(hubId, uid, label, from) {
   return addDoc(collection(db, 'hubs', hubId, 'files'), withoutEmpty({
-    file: withoutEmpty({ name: label.name, size: label.size, type: label.type, path: label.path }),
+    file: withoutEmpty({ name: label.name, size: label.size, type: label.type, path: label.path, sha256: label.sha256 }),
     by: uid,
     fromId: from?.id,
     fromName: from?.file?.name,

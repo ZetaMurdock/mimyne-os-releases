@@ -61,8 +61,11 @@ export async function uploadFile(file, onProgress = () => {}) {
   const start = await callJson('/uploads', { name: file.name, size: file.size, type });
   const ticket = encodeURIComponent(start.ticket);
 
+  let sha256 = null;
   if (start.mode === 'object') {
-    await put(`${FILES_URL}/uploads/object?ticket=${ticket}`, file, await token(), (n) => onProgress(n / file.size));
+    const stored = await put(`${FILES_URL}/uploads/object?ticket=${ticket}`, file, await token(), (n) => onProgress(n / file.size));
+    // The file service's hash of what it stored, for downloads to be checked against.
+    if (SHA256.test(stored?.sha256 ?? '')) sha256 = stored.sha256;
   } else {
     const etags = [];
     for (let n = 1; n <= start.parts; n++) {
@@ -75,7 +78,7 @@ export async function uploadFile(file, onProgress = () => {}) {
     await callJson(`/uploads/complete?ticket=${ticket}`, { etags });
   }
   onProgress(1);
-  return { name: file.name, size: file.size, type, path: start.path };
+  return { name: file.name, size: file.size, type, path: start.path, ...(sha256 ? { sha256 } : {}) };
 }
 
 /** A picked file's label, saying so when a picture, video or song goes as a plain file. */
@@ -86,9 +89,41 @@ export async function uploadPicked({ file, label: ready, display = true }, onPro
   return display === false && showable(file) ? { ...label, display: false } : label;
 }
 
-/** Starts downloading a file through a link that works for ten minutes. */
-export async function downloadFile(path) {
-  window.location.assign(await fileLink(path));
+export const SHA256 = /^[0-9a-f]{64}$/;
+// Files up to this size are fetched and checked before they're saved; bigger
+// ones (which never carry a hash) download directly.
+const CHECK_LIMIT = 64 * 1024 ** 2;
+
+const hex = (bytes) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+/**
+ * Downloads a file through a link that works for ten minutes. A file that
+ * carries its SHA-256 is fetched first and saved only if its bytes still
+ * match: a file changed after it was shared never reaches the computer.
+ * Returns { checked }.
+ */
+export async function downloadFile(file) {
+  const target = typeof file === 'string' ? { path: file } : file;
+  const url = await fileLink(target.path);
+  if (!SHA256.test(target.sha256 ?? '') || !(target.size <= CHECK_LIMIT)) {
+    window.location.assign(url);
+    return { checked: false };
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("The file couldn't be downloaded. Try again.");
+  const bytes = await res.arrayBuffer();
+  if (hex(await crypto.subtle.digest('SHA-256', bytes)) !== target.sha256) {
+    throw new Error("This file isn't the one that was shared (its contents changed), so it wasn't saved.");
+  }
+  const saved = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = saved;
+  a.download = target.name || 'download';
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(saved), 60_000);
+  return { checked: true };
 }
 
 // Links last 10 minutes; each is reused for 8, so a page of pictures asks

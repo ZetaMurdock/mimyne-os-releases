@@ -151,3 +151,16 @@ button.file-card__locked:hover {
   background: var(--surface-1, #1a1a1c);
   color: var(--text);
 }
+
+/* Before downloading a program or script (useSafeDownload). */
+.file-warning__name {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.file-warning__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
