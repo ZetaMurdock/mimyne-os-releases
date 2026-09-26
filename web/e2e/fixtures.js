@@ -65,12 +65,12 @@ async function fakeWorker(context, storage, security) {
 
 /**
  * The file service's 2-step recovery (files-worker/src/security.js), in
- * memory: `security` is { codesLeft, recovery, pending, calls }.
+ * memory: `security` is { twoStep, codesLeft, recovery, pending, calls }.
  */
 function fakeSecurity(security, method, path, body) {
   security.calls.push([method, path, body]);
   if (method === 'GET' && path === '/security') {
-    return [{ codesLeft: security.codesLeft, codesMadeAt: null, recovery: security.recovery, pending: security.pending, emailReady: true }];
+    return [{ twoStep: security.twoStep, codesLeft: security.codesLeft, codesMadeAt: null, recovery: security.recovery, pending: security.pending, emailReady: true }];
   }
   if (path === '/security/codes') {
     security.codesLeft = 10;
@@ -158,7 +158,7 @@ export const test = base.extend({
   // What /usage reports; tests change it before uploading.
   storage: async ({}, use) => use({ used: 0, limit: 5 * 1024 ** 3 }),
   // What the file service's /security routes hold, shared by everyone's browser.
-  security: async ({}, use) => use({ codesLeft: 0, recovery: null, pending: null, calls: [] }),
+  security: async ({}, use) => use({ twoStep: true, codesLeft: 0, recovery: null, pending: null, calls: [] }),
 
   // `person('name')` gives a signed-up person in a browser of their own.
   // Anything the page throws fails the test.

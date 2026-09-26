@@ -114,6 +114,10 @@ function Settings({ uid }) {
   }
 
   const on = factors.length > 0;
+  // 2-step needs the Firebase project on Identity Platform; the file service
+  // says whether it's switched on (TWO_STEP). Until then none of it shows,
+  // except second steps someone already has, so they can still remove them.
+  const twoStep = info?.twoStep === true;
 
   return (
     <div className="security">
@@ -122,7 +126,7 @@ function Settings({ uid }) {
         <p className="muted">Keep your Mimyne account yours.</p>
       </header>
 
-      {staff && !on && (
+      {twoStep && staff && !on && (
         <p className="security__banner" role="status">
           <Icon name="lock" size={16} />
           Staff tools will need 2-step verification. Turn it on now so you aren&apos;t locked out of them.
@@ -130,6 +134,18 @@ function Settings({ uid }) {
       )}
       {error && <p className="form-error" role="alert">{error}</p>}
 
+      <section className="security__section" aria-labelledby="email">
+        <div className="security__row">
+          <div>
+            <h2 className="security__h2" id="email">Email</h2>
+            <p className="muted security__address">{me.email}</p>
+          </div>
+          <span className={`security__state ${verified ? 'is-on' : ''}`}>{verified ? 'Verified' : 'Not verified'}</span>
+        </div>
+        {!verified && <VerifyEmail onVerified={() => setVerified(true)} />}
+      </section>
+
+      {(twoStep || on) && (
       <section className="security__section" aria-labelledby="two-step">
         <div className="security__row">
           <div>
@@ -150,8 +166,8 @@ function Settings({ uid }) {
           </div>
         ))}
 
-        {!verified ? (
-          <VerifyEmailFirst onVerified={() => setVerified(true)} />
+        {!twoStep ? null : !verified ? (
+          <p className="muted">Verify your email above to turn this on.</p>
         ) : adding === 'app' ? (
           <AddApp fresh={fresh} onDone={added} onCancel={() => setAdding(null)} />
         ) : adding === 'phone' ? (
@@ -163,10 +179,11 @@ function Settings({ uid }) {
           </div>
         )}
       </section>
+      )}
 
       {codes && <NewCodes codes={codes} onClose={() => setCodes(null)} />}
 
-      {on && (
+      {twoStep && on && (
         <section className="security__section" aria-labelledby="codes">
           <div className="security__row">
             <div>
@@ -195,15 +212,17 @@ function Settings({ uid }) {
         </section>
       )}
 
-      <section className="security__section" aria-labelledby="recovery">
-        <div className="security__row">
-          <div>
-            <h2 className="security__h2" id="recovery">Recovery email</h2>
-            <p className="muted">A second address that can turn off 2-step verification if you lose your phone and your codes.</p>
+      {twoStep && (
+        <section className="security__section" aria-labelledby="recovery">
+          <div className="security__row">
+            <div>
+              <h2 className="security__h2" id="recovery">Recovery email</h2>
+              <p className="muted">A second address that can turn off 2-step verification if you lose your phone and your codes.</p>
+            </div>
           </div>
-        </div>
-        <RecoveryEmail info={info} fresh={fresh} busy={busy} run={run} reload={load} />
-      </section>
+          <RecoveryEmail info={info} fresh={fresh} busy={busy} run={run} reload={load} />
+        </section>
+      )}
 
       <section className="security__section" aria-labelledby="devices">
         <div className="security__row">
@@ -232,12 +251,12 @@ function Settings({ uid }) {
   );
 }
 
-function VerifyEmailFirst({ onVerified }) {
+function VerifyEmail({ onVerified }) {
   const [sent, setSent] = useState(false);
   const [note, setNote] = useState(null);
   return (
     <div className="security__panel">
-      <p>Verify your email address before turning on 2-step verification.</p>
+      <p>Open the link we emailed you to verify this address. It proves the account is yours.</p>
       <div className="security__actions">
         <Button size="sm" disabled={sent} onClick={() => sendEmailVerification(auth.currentUser).then(() => setSent(true), (e) => setNote(twoStepMessage(e)))}>
           {sent ? 'Sent. Check your inbox' : 'Send verification email'}

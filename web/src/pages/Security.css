@@ -62,6 +62,10 @@
   font-weight: 600;
 }
 
+.security__address {
+  overflow-wrap: anywhere;
+}
+
 .security__state {
   flex-shrink: 0;
   padding: 3px 10px;

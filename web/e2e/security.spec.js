@@ -9,10 +9,12 @@ test('2-step verification: turned on with a phone, then asked for at the next si
   await page.locator('.notch__name').click();
   await page.getByRole('link', { name: 'Security', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/security$/);
-  await expect(page.locator('.security__state')).toHaveText('Off');
+  const state = (name) => page.getByRole('region', { name }).locator('.security__state');
+  await expect(state('2-step verification')).toHaveText('Off');
 
   // An unverified address can't have 2-step yet.
-  await expect(page.getByText('Verify your email address before')).toBeVisible();
+  await expect(state('Email')).toHaveText('Not verified');
+  await expect(page.getByText('Verify your email above to turn this on.')).toBeVisible();
   await verifyEmail(a.uid);
   await page.getByRole('button', { name: /verified it/ }).click();
 
@@ -23,7 +25,8 @@ test('2-step verification: turned on with a phone, then asked for at the next si
   await page.getByLabel('Code').fill(await textedCode(PHONE));
   await page.getByRole('button', { name: 'Turn on' }).click();
 
-  await expect(page.locator('.security__state')).toHaveText('On');
+  await expect(state('Email')).toHaveText('Verified');
+  await expect(state('2-step verification')).toHaveText('On');
   await expect(page.locator('.security__item', { hasText: 'Text message' })).toContainText('5555550123');
   // The first second step comes with backup codes, shown once.
   await expect(page.getByRole('region', { name: 'Your new backup codes' }).locator('li')).toHaveCount(10);
@@ -54,6 +57,26 @@ test('2-step verification: turned on with a phone, then asked for at the next si
   await page.getByLabel('Code').fill(await textedCode(PHONE));
   await page.getByRole('button', { name: 'Verify' }).click();
   await expect(page.locator('.notch__name')).toHaveText(a.username);
+});
+
+test("until 2-step is switched on, none of it shows; the rest of Security works", async ({ person, security }) => {
+  security.twoStep = false;
+  const a = await person('plain');
+  const { page } = a;
+  await page.goto('/settings/security');
+  await expect(page.getByRole('region', { name: 'Email' })).toContainText(a.email);
+  await expect(page.getByRole('region', { name: 'Signed-in devices' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out everywhere' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '2-step verification' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Add authenticator app|Add phone/ })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Recovery email' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Backup codes' })).toHaveCount(0);
+
+  // Sign out everywhere signs this browser out too.
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Sign out everywhere' }).click();
+  await expect(page.locator('.notch__name')).toHaveCount(0);
+  expect(security.calls.some(([m, p]) => m === 'POST' && p === '/security/sign-out-everywhere')).toBe(true);
 });
 
 test('new passwords need 10 characters', async ({ page }) => {
