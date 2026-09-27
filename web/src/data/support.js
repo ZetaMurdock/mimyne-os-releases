@@ -122,6 +122,11 @@ export const saveSupportEven = (even) => ask('/support/me', { method: 'POST', bo
 /** A Hub's month as its owner sees it: the estimate, contributors, active people, eligibility. */
 export const fetchHubEarnings = (hubId, month) => ask(withMonth(`/earnings/hub/${encodeURIComponent(hubId)}`, month));
 
+/** Staff: the Hubs flagged at a close ('open'), or those already decided ('released', 'held'). */
+export const fetchReviewQueue = (status = 'open') => ask(`/support/review?status=${encodeURIComponent(status)}`);
+/** Staff: release a flagged month's earning into the ordinary hold, or keep it held. */
+export const decideReview = (hub, month, action) => ask('/support/review', { method: 'POST', body: { hub, month, action } });
+
 /** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
 export async function fetchSupportState({ fetchFn = fetch } = {}) {
   try {
