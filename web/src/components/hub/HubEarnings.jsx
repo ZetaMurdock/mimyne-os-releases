@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Button from '../Button.jsx';
 import Icon from '../Icon.jsx';
-import { fetchHubEarnings, fetchPayoutAccount, money, monthName, startPayouts } from '../../data/support.js';
+import { fetchHubEarnings, fetchPayoutAccount, money, monthName, openStripeDashboard, startPayouts } from '../../data/support.js';
 import './HubEarnings.css';
 
 // Hub → Earnings, for its owner: what the Hub would be owed this month if
@@ -189,6 +189,19 @@ function Payouts() {
     }
   }
 
+  async function openStripe() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const link = await openStripeDashboard();
+      if (link?.url) window.open(link.url, '_blank', 'noopener');
+    } catch (error) {
+      setProblem(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="card earnings__card">
       <h2 className="earnings__h2">Payouts</h2>
@@ -224,9 +237,19 @@ function Payouts() {
           {account.needs?.length > 0 && (
             <p className="muted">Stripe still needs {account.needs.map((n) => NEEDS[n] ?? n.replace(/[._]/g, ' ')).join(', ')}.</p>
           )}
+          {account.payoutFailure && (
+            <p className="earnings__problem" role="alert">
+              Stripe could not pay your bank{account.payoutFailure.at ? ` on ${new Date(account.payoutFailure.at).toLocaleDateString()}` : ''}
+              {account.payoutFailure.message ? `: ${account.payoutFailure.message}` : '.'} The money is still in your Stripe balance; check your bank
+              details in your Stripe dashboard.
+            </p>
+          )}
           <div className="review-row__actions">
             {account.status !== 'verified' && (
               <Button size="sm" variant="primary" loading={busy} onClick={() => begin(false)}>Continue with Stripe</Button>
+            )}
+            {account.status !== 'incomplete' && (
+              <Button size="sm" variant={account.status === 'verified' ? 'primary' : 'ghost'} loading={busy} onClick={openStripe}>Open your Stripe dashboard</Button>
             )}
             <Button
               size="sm"

@@ -135,6 +135,8 @@ export const setAccountBlocked = (uid, blocked) => ask('/support/block', { metho
 export const fetchPayoutAccount = () => ask('/earnings/payout-account');
 /** Starts (or resumes) Stripe's onboarding for the owner: { url } to send them to. `replace` moves to a new account. */
 export const startPayouts = (replace = false) => ask('/earnings/payout-account', { method: 'POST', body: { replace } });
+/** A link into the owner's own Stripe dashboard (bank details, the payouts Stripe made them): { url }. */
+export const openStripeDashboard = () => ask('/earnings/payout-account', { method: 'POST', body: { login: true } });
 
 /** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
 export async function fetchSupportState({ fetchFn = fetch } = {}) {

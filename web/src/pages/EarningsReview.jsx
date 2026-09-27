@@ -142,6 +142,7 @@ const SKIPS = {
   'nothing-released': 'nothing released',
   'account-just-changed': 'account just changed',
   'paid-this-month': 'paid this month already',
+  'transfer-failed': 'transfer refused by Stripe',
 };
 
 function summary(run) {
