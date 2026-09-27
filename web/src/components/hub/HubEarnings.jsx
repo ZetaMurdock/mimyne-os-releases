@@ -37,11 +37,12 @@ export default function HubEarnings({ hub }) {
       <section className="card earnings__card">
         <h2 className="earnings__h2">{monthName(view.month)}</h2>
         <p className="earnings__big">
-          {money(view.estimatedCents)} <span className="earnings__tag">estimated</span>
+          {money(view.closed ? view.finalCents : view.estimatedCents)} <span className="earnings__tag">{view.closed ? 'final' : 'estimated'}</span>
         </p>
         <p className="muted">
-          What {hub.name} would be owed if the month closed now: the part of each contributing Plus member's support that their time here earns.
-          Nothing is paid out yet.
+          {view.closed
+            ? `What ${hub.name} earned from the Plus members who spent time here that month, as the month closed. It is held before it is paid out.`
+            : `What ${hub.name} would be owed if the month closed now: the part of each contributing Plus member's support that their time here earns. Nothing is paid out yet.`}
         </p>
         <dl className="earnings__facts">
           <div>
