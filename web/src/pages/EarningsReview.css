@@ -124,3 +124,38 @@
   display: flex;
   gap: var(--s-2);
 }
+
+.review__runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.review__runs li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.review__runs li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.review__run-when {
+  font-size: var(--t-caption);
+  text-align: right;
+}
+
+.review__run-said {
+  grid-column: 1 / -1;
+  color: var(--text-2);
+}
+
+.review__runs li.is-failed .review__run-said {
+  color: var(--live);
+}

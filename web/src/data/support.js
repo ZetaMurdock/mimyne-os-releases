@@ -124,6 +124,8 @@ export const fetchHubEarnings = (hubId, month) => ask(withMonth(`/earnings/hub/$
 
 /** Staff: the Hubs flagged at a close ('open'), or those already decided ('released', 'held'). */
 export const fetchReviewQueue = (status = 'open') => ask(`/support/review?status=${encodeURIComponent(status)}`);
+/** Staff: what each monthly close and payout run did, newest first. */
+export const fetchSupportRuns = () => ask('/support/runs');
 /** Staff: release a flagged month's earning into the ordinary hold, or keep it held. */
 export const decideReview = (hub, month, action) => ask('/support/review', { method: 'POST', body: { hub, month, action } });
 /** Staff: flag an account for abuse, so nothing of theirs counts from now on - or unflag it. */
