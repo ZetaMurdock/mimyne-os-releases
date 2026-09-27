@@ -132,7 +132,7 @@ function Queue() {
 // the Worker's logs.
 const KINDS = { close: 'Monthly close', payouts: 'Payouts' };
 const ERRORS = {
-  'no-stripe-key': 'No Stripe key at Mimyne's end, so nobody could be paid',
+  'no-stripe-key': "No Stripe key at Mimyne's end, so nobody could be paid",
   'month-open': 'The month had not ended',
   'support-off': 'The program was switched off',
 };
