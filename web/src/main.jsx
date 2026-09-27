@@ -50,6 +50,7 @@ const router = createBrowserRouter([
                 { path: 'pricing', lazy: page(() => import('./pages/Pricing.jsx')) },
                 { path: 'settings/security', lazy: page(() => import('./pages/Security.jsx')) },
                 { path: 'settings/support', lazy: page(() => import('./pages/Support.jsx')) },
+                { path: 'settings/standing', lazy: page(() => import('./pages/Standing.jsx')) },
                 { path: 'security/recover', lazy: page(() => import('./pages/Recover.jsx')) },
                 { path: 'security/confirm', lazy: page(() => import('./pages/SecurityLink.jsx')) },
               ]
