@@ -14,6 +14,22 @@ export const ACTIONS = [
   { id: 'clear', label: 'Clear', hint: 'Lifts a mute, suspension or ban; strikes still expire on their own' },
 ];
 
+// The audit team's levels, and which level each decision needs. Developers
+// are Senior by their account type; the Owner is everything; anyone else is
+// on the team only while the Owner says so (Staff > The team).
+export const LEVELS = ['triage', 'auditor', 'senior', 'owner'];
+const RANK = { triage: 1, auditor: 2, senior: 3, owner: 4 };
+export const ACTION_LEVEL = { dismiss: 'triage', warn: 'triage', strike: 'auditor', mute: 'auditor', suspend: 'senior', ban: 'senior', clear: 'senior' };
+export const LEVEL_NAME = { triage: 'Triage', auditor: 'Auditor', senior: 'Senior', owner: 'Owner' };
+export const allowedAt = (level, action) => (RANK[level] ?? 0) >= (RANK[ACTION_LEVEL[action]] ?? Infinity);
+
+/** Your level as the file service sees it: { level } with null for no one on the team. */
+export const fetchStaffLevel = () => ask('/staff/me');
+/** Owner: the appointed team. */
+export const fetchTeam = () => ask('/staff');
+/** Owner: appoint someone at a level, or with null take them off the team. */
+export const setTeamMember = (uid, level) => ask('/staff', { method: 'POST', body: { uid, level } });
+
 /** Your own standing: warnings, strikes and their dates, a mute, a suspension, a ban. Never who decided. */
 export const fetchMyStanding = () => ask('/moderation/me');
 

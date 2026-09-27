@@ -47,6 +47,7 @@ const router = createBrowserRouter([
                 { path: 'messages/:id', lazy: page(() => import('./pages/Messages.jsx')) },
                 { path: 'staff/reports', lazy: page(() => import('./pages/Reports.jsx')) },
                 { path: 'staff/earnings', lazy: page(() => import('./pages/EarningsReview.jsx')) },
+                { path: 'staff/team', lazy: page(() => import('./pages/Team.jsx')) },
                 { path: 'pricing', lazy: page(() => import('./pages/Pricing.jsx')) },
                 { path: 'settings/security', lazy: page(() => import('./pages/Security.jsx')) },
                 { path: 'settings/support', lazy: page(() => import('./pages/Support.jsx')) },

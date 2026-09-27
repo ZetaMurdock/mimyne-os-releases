@@ -1,0 +1,111 @@
+.team {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.team--empty {
+  text-align: center;
+}
+
+.team__title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--s-1);
+}
+
+.team__problem {
+  color: var(--live);
+  margin: 0;
+}
+
+.team__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.team__h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-heading);
+  font-weight: 600;
+  margin: 0;
+}
+
+.team__levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.team__levels dt {
+  font-weight: 600;
+}
+
+.team__levels dd {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+
+.team__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+
+.team__input,
+.team__select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  padding: 6px 10px;
+}
+
+.team__input {
+  flex: 1;
+  min-width: 160px;
+}
+
+.team__said {
+  margin: 0;
+  font-size: var(--t-caption);
+}
+
+.team__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.team__member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.team__member:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.team__name {
+  font-weight: 600;
+}
+
+.team__member .team__select {
+  margin-left: auto;
+}
