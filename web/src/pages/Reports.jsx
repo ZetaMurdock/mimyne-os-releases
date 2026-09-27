@@ -107,13 +107,16 @@ function ReportRow({ report: r, me, repeat, onError }) {
   const reporter = usePerson(r.reporterUid);
   const [busy, setBusy] = useState(false);
   const [standing, setStanding] = useState(null);
+  const [standingUnknown, setStandingUnknown] = useState(false);
   const [note, setNote] = useState('');
   const [days, setDays] = useState('');
 
   useEffect(() => {
     let live = true;
     if (r.status !== 'open') return undefined;
-    fetchStandingOf(r.targetUid).then((s) => live && setStanding(s)).catch(() => {});
+    fetchStandingOf(r.targetUid)
+      .then((s) => live && (s ? setStanding(s) : setStandingUnknown(true)))
+      .catch(() => live && setStandingUnknown(true));
     return () => { live = false; };
   }, [r.targetUid, r.status]);
 
@@ -128,8 +131,11 @@ function ReportRow({ report: r, me, repeat, onError }) {
   }
 
   // One decision: the file service records it, resolves the report with
-  // the outcome, and tells the person. A ban asks first.
+  // the outcome, and tells the person. A ban asks first. Dismissing is
+  // the one decision that changes nothing about the person, so it is the
+  // plain resolve, written here.
   async function act(action) {
+    if (action === 'dismiss') { await mark('resolved'); return; }
     if (action === 'ban' && !window.confirm(`Ban @${target.username}? They can read but never post again until cleared, and Hubs they own stop earning.`)) return;
     setBusy(true);
     try {
@@ -172,7 +178,7 @@ function ReportRow({ report: r, me, repeat, onError }) {
       {r.status === 'open' && (
         <div className="report-row__decide">
           <p className="muted report-row__standing">
-            On record for @{target.username}: {standing ? standingLine(standing) : 'loading…'}
+            On record for @{target.username}: {standing ? standingLine(standing) : standingUnknown ? 'could not be read' : 'loading…'}
           </p>
           <div className="report-row__fields">
             <input

@@ -1,6 +1,6 @@
 import { expect, makeHub, seed, tag, test } from './fixtures.js';
 
-test('anyone can report a Hub, only staff see reports, and staff resolve them', async ({ person }) => {
+test('anyone can report a Hub, only staff see reports, and staff dismiss them', async ({ person }) => {
   const owner = await person('owner');
   const slug = `bad${tag()}`;
   await makeHub(owner.page, 'Free Stuff', slug);
@@ -25,7 +25,7 @@ test('anyone can report a Hub, only staff see reports, and staff resolve them', 
   await expect(row).toBeVisible();
   await expect(row).toContainText('Spam or scams');
   await expect(row).toContainText('Free Stuff');
-  await row.getByRole('button', { name: 'Resolve' }).click();
+  await row.getByRole('button', { name: 'Dismiss' }).click();
   await expect(row).toHaveCount(0);
   await staff.page.getByRole('tab', { name: 'Resolved' }).click();
   await expect(staff.page.locator('.report-row', { hasText: 'Fake giveaways' })).toBeVisible();
