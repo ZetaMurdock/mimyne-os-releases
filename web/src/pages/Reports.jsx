@@ -4,8 +4,8 @@ import { Avatar } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
 import Icon from '../components/Icon.jsx';
 import { usePerson } from '../data/people.js';
-import { ACTIONS, decideReport, fetchStandingOf } from '../data/moderation.js';
-import { REASONS, amStaff, setReportStatus, watchReports } from '../data/reports.js';
+import { ACTIONS, ACTION_LEVEL, LEVEL_NAME, allowedAt, decideReport, fetchStandingOf } from '../data/moderation.js';
+import { REASONS, setReportStatus, staffLevelOf, watchReports } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
 import { timeAgo } from '../lib/format.js';
 import NeedsAccount from './NeedsAccount.jsx';
@@ -20,12 +20,12 @@ const KIND = {
 /** Reports for Mimyne's staff: the Owner and Developers. Everyone else sees nothing here. */
 export default function Reports() {
   const { user, status } = useSession();
-  const [staff, setStaff] = useState(null);
+  const [level, setLevel] = useState(undefined);
 
   useEffect(() => {
     let live = true;
-    setStaff(null);
-    if (user) amStaff(user.uid).then((yes) => live && setStaff(yes));
+    setLevel(undefined);
+    if (user) staffLevelOf(user.uid).then((found) => live && setLevel(found));
     return () => {
       live = false;
     };
@@ -33,8 +33,8 @@ export default function Reports() {
 
   if (status !== 'ready' && status !== 'signed-out' && !user) return null;
   if (!user) return <NeedsAccount what="this page" />;
-  if (staff === null) return null;
-  if (!staff) {
+  if (level === undefined) return null;
+  if (!level) {
     return (
       <div className="reports reports--empty">
         <h1 className="reports__title">Nothing here</h1>
@@ -42,10 +42,10 @@ export default function Reports() {
       </div>
     );
   }
-  return <ReportList me={user.uid} />;
+  return <ReportList me={user.uid} level={level} />;
 }
 
-function ReportList({ me }) {
+function ReportList({ me, level }) {
   const [reports, setReports] = useState(null);
   const [error, setError] = useState(null);
   const [show, setShow] = useState('open');
@@ -66,7 +66,7 @@ function ReportList({ me }) {
       <header className="reports__head">
         <div>
           <h1 className="reports__title">Reports</h1>
-          <p className="muted">{reports ? `${open} open` : 'Loading…'}</p>
+          <p className="muted">{reports ? `${open} open` : 'Loading…'} · you are {LEVEL_NAME[level] ?? level}</p>
         </div>
         <div className="reports__tabs" role="tablist">
           {['open', 'resolved'].map((s) => (
@@ -82,7 +82,7 @@ function ReportList({ me }) {
       )}
       <ul className="reports__list">
         {shown.map((r) => (
-          <ReportRow key={r.id} report={r} me={me} repeat={against.get(r.targetUid) ?? 0} onError={setError} />
+          <ReportRow key={r.id} report={r} me={me} level={level} repeat={against.get(r.targetUid) ?? 0} onError={setError} />
         ))}
       </ul>
     </div>
@@ -102,7 +102,7 @@ function standingLine(s) {
   return parts.length ? parts.join(' · ') : 'nothing on record';
 }
 
-function ReportRow({ report: r, me, repeat, onError }) {
+function ReportRow({ report: r, me, level, repeat, onError }) {
   const target = usePerson(r.targetUid);
   const reporter = usePerson(r.reporterUid);
   const [busy, setBusy] = useState(false);
@@ -206,8 +206,8 @@ function ReportRow({ report: r, me, repeat, onError }) {
                 key={a.id}
                 size="sm"
                 variant={a.id === 'dismiss' ? 'secondary' : a.id === 'ban' ? 'inverse' : 'ghost'}
-                title={a.hint}
-                disabled={busy}
+                title={allowedAt(level, a.id) ? a.hint : `Needs ${LEVEL_NAME[ACTION_LEVEL[a.id]]} or above`}
+                disabled={busy || !allowedAt(level, a.id)}
                 onClick={() => act(a.id)}
               >
                 {a.label}

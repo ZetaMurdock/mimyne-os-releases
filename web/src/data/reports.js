@@ -37,15 +37,27 @@ export function fileReport(uid, about, reason, details) {
   return addDoc(collection(db, 'reports'), report);
 }
 
-/** Whether this account is staff: the Owner, or a Developer, still in date. */
-export async function amStaff(uid) {
-  if (!uid) return false;
+/**
+ * This account's staff level, or null: the Owner and Developers by their
+ * account type (a Developer is Senior), anyone else by the Owner's
+ * appointment (staff/<uid>, readable by its own person). The file service
+ * works it out the same way for every decision.
+ */
+export async function staffLevelOf(uid) {
+  if (!uid) return null;
   const snap = await getDoc(doc(db, 'account_types', uid)).catch(() => null);
   const t = snap?.data();
-  if (!t || !['owner', 'developer'].includes(t.type)) return false;
-  if (t.days == null) return true;
-  const granted = t.grantedAt?.toMillis?.() ?? 0;
-  return Date.now() < granted + Number(t.days) * 86_400_000;
+  const live = t && (t.days == null || Date.now() < (t.grantedAt?.toMillis?.() ?? 0) + Number(t.days) * 86_400_000);
+  if (live && t.type === 'owner') return 'owner';
+  if (live && t.type === 'developer') return 'senior';
+  const appointed = await getDoc(doc(db, 'staff', uid)).catch(() => null);
+  const level = appointed?.data()?.level;
+  return ['triage', 'auditor', 'senior'].includes(level) ? level : null;
+}
+
+/** Whether this account is staff at any level. */
+export async function amStaff(uid) {
+  return (await staffLevelOf(uid)) !== null;
 }
 
 const text = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');

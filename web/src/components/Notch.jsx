@@ -5,7 +5,7 @@ import Icon from './Icon.jsx';
 import Menu, { MenuItem } from './Menu.jsx';
 import NotificationBell from './NotificationBell.jsx';
 import { getHubCard, getHubCards } from '../data/api.js';
-import { amStaff } from '../data/reports.js';
+import { staffLevelOf } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
 import { useWebStatusPublisher } from '../data/status.js';
 import './Notch.css';
@@ -91,10 +91,12 @@ function Notch() {
   const [missing, setMissing] = useState(false);
   const [hubs, setHubs] = useState([]);
   const [staff, setStaff] = useState(false);
+  const [owner, setOwner] = useState(false);
   useEffect(() => {
     let live = true;
     setStaff(false);
-    if (user) amStaff(user.uid).then((yes) => live && setStaff(yes));
+    setOwner(false);
+    if (user) staffLevelOf(user.uid).then((level) => { if (live) { setStaff(!!level); setOwner(level === 'owner'); } });
     return () => {
       live = false;
     };
@@ -228,6 +230,7 @@ function Notch() {
           <MenuItem as={Link} to="/settings/standing">Your standing</MenuItem>
           {staff && <MenuItem as={Link} to="/staff/reports">Reports</MenuItem>}
           {staff && <MenuItem as={Link} to="/staff/earnings">Earnings review</MenuItem>}
+          {owner && <MenuItem as={Link} to="/staff/team">The team</MenuItem>}
           <MenuItem onClick={signOut}>Sign out</MenuItem>
         </Menu>
         <Menu
