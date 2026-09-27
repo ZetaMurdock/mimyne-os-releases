@@ -1,0 +1,128 @@
+.support {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.support__title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.support__lead {
+  color: var(--text-2);
+  margin: 0;
+}
+
+.support__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.support__h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-heading);
+  font-weight: 600;
+  margin: 0;
+}
+
+.support__problem {
+  color: var(--live);
+  margin: 0;
+}
+
+.support__link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.support__even {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+}
+
+.support__hubs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.support__hub {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2fr auto auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.support__hub-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support__bar {
+  display: block;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.support__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+.support__hub-share,
+.support__hub-cents {
+  font-family: var(--font-mono);
+  font-size: var(--t-caption);
+  color: var(--text-2);
+  text-align: right;
+}
+
+.support__choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-3);
+  align-items: start;
+  cursor: pointer;
+}
+
+.support__choice input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.support__choice span {
+  color: var(--text-2);
+}
+
+.support__choice strong {
+  color: var(--text);
+}
+
+@media (max-width: 560px) {
+  .support__hub {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .support__bar {
+    grid-column: 1 / -1;
+  }
+}

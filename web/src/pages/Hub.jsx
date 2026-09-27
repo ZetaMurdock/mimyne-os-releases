@@ -10,6 +10,7 @@ import RoleChip from '../components/RoleChip.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
 import ReportDialog from '../components/ReportDialog.jsx';
 import HubClips from '../components/hub/HubClips.jsx';
+import HubEarnings from '../components/hub/HubEarnings.jsx';
 import HubFiles from '../components/hub/HubFiles.jsx';
 import HubRooms from '../components/hub/HubRooms.jsx';
 import { Avatar } from '../components/Avatar.jsx';
@@ -37,6 +38,8 @@ const TABS = [
   { id: 'pledged', label: 'Pledged' },
   { id: 'rules', label: 'Rules' },
 ];
+// The owner's own tab: what the Hub earns from Plus supports Hubs.
+const EARNINGS = { id: 'earnings', label: 'Earnings' };
 
 const LEVEL_LABEL = { owner: 'Runs the Hub', mod: 'Keeps it tidy', member: 'Pledged' };
 
@@ -54,7 +57,8 @@ export default function Hub() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inIt, hub.id]);
   const [params, setParams] = useSearchParams();
-  const tab = TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'rooms';
+  const tabs = user && hub.ownerId === user.uid ? [...TABS, EARNINGS] : TABS;
+  const tab = tabs.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'rooms';
   const setTab = (id, extra = {}) =>
     setParams(Object.fromEntries(Object.entries({ tab: id === 'rooms' ? null : id, ...extra }).filter(([, v]) => v)), { replace: true, preventScrollReset: true });
   const [sharing, setSharing] = useState(false);
@@ -106,7 +110,7 @@ export default function Hub() {
       <div className={`hub__content ${['rooms', 'files', 'clips'].includes(tab) ? 'hub__content--wide' : ''}`}>
         <div className="hub__main">
           <div className="tabs" role="tablist" aria-label={`${hub.name} sections`}>
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -167,6 +171,8 @@ export default function Hub() {
             )}
 
             {tab === 'rules' && <Rules hub={hub} />}
+
+            {tab === 'earnings' && <HubEarnings hub={hub} />}
           </div>
         </div>
 
