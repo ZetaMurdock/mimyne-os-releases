@@ -16,6 +16,7 @@ import { Avatar } from '../components/Avatar.jsx';
 import { createPost, getHub } from '../data/api.js';
 import { usePerson } from '../data/people.js';
 import { useHubAccess, useSession } from '../data/session.jsx';
+import { useSupportMinutes } from '../data/support.js';
 import './Hub.css';
 
 export function hubLoader({ params }) {
@@ -43,6 +44,8 @@ export default function Hub() {
   const { hub, roles, members, posts: loadedPosts } = useLoaderData();
   const { user, signIn } = useSession();
   const access = useHubAccess(hub, members);
+  // Plus supports Hubs: the qualified minutes spent here (data/support.js).
+  useSupportMinutes(hub.id, user?.uid);
   const { remember } = useSession();
   const inIt = !!user && (hub.ownerId === user.uid || members.some((m) => m.uid === user.uid));
   // In this Hub but missing from your list of Hubs: put it back.
