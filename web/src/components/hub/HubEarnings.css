@@ -86,6 +86,52 @@
   margin: 0;
 }
 
+.earnings__history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.earnings__entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.earnings__entry:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.earnings__entry-what {
+  grid-column: 1;
+}
+
+.earnings__entry-state {
+  grid-column: 1;
+  font-size: var(--t-caption);
+}
+
+.earnings__entry-ref {
+  font-family: var(--font-mono);
+}
+
+.earnings__entry-cents {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-family: var(--font-mono);
+}
+
+.earnings__entry.is-reversal .earnings__entry-cents,
+.earnings__entry.is-payout .earnings__entry-cents {
+  color: var(--text-2);
+}
+
 .earnings__problem {
   color: var(--live);
 }
