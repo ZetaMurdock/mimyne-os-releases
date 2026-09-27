@@ -156,9 +156,47 @@ export const money = (cents) => {
 /** "September 2026" for "2026-09". */
 export const monthName = (month) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-/** Whether a video on the page is playing (a Clip, an attached video). */
-export const anyVideoPlaying = (root = document) =>
-  [...root.querySelectorAll('video')].some((v) => !v.paused && !v.ended && v.readyState > 2);
+// Embedded players. A YouTube player (the site's are made with enablejsapi,
+// lib/profileShapes.js) tells the page its state once the page asks for
+// it: playerState 1 is playing, and while it plays the reports keep
+// coming. Medal's player says nothing, so a Medal clip counts only through
+// the person's own activity.
+const PLAYER_ORIGINS = new Set(['https://www.youtube.com', 'https://www.youtube-nocookie.com']);
+export const EMBED_QUIET_MS = 10_000;
+const embeds = new Map();
+let embedsListening = false;
+
+/** Hears what embedded players report. Once per page. */
+export function listenToEmbeds(win = window) {
+  if (embedsListening) return;
+  embedsListening = true;
+  win.addEventListener('message', (event) => {
+    if (!PLAYER_ORIGINS.has(event.origin) || typeof event.data !== 'string') return;
+    let data;
+    try { data = JSON.parse(event.data); } catch { return; }
+    const state = data?.info?.playerState;
+    if (data?.event !== 'infoDelivery' || typeof state !== 'number') return;
+    embeds.set(event.source ?? 'page', { playing: state === 1, at: Date.now() });
+  });
+}
+
+/** Asks every YouTube player on the page to report, and forgets ones long quiet. */
+export function askEmbeds(root = document, now = Date.now()) {
+  for (const [key, seen] of embeds) if (now - seen.at > 30 * EMBED_QUIET_MS) embeds.delete(key);
+  for (const frame of root.querySelectorAll('iframe')) {
+    let origin;
+    try { origin = new URL(frame.src).origin; } catch { continue; }
+    if (!PLAYER_ORIGINS.has(origin) || !frame.contentWindow) continue;
+    frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'mimyne-support', channel: 'widget' }), origin);
+  }
+}
+
+/** Whether an embedded player reported playing in the last EMBED_QUIET_MS. */
+export const anyEmbedPlaying = (now = Date.now()) => [...embeds.values()].some((e) => e.playing && now - e.at < EMBED_QUIET_MS);
+
+/** Whether a video on the page is playing: a Clip, an attached video, or an embedded player that says so. */
+export const anyVideoPlaying = (root = document, now = Date.now()) =>
+  [...root.querySelectorAll('video')].some((v) => !v.paused && !v.ended && v.readyState > 2) || anyEmbedPlaying(now);
 
 const ACTIVITY = ['pointerdown', 'keydown', 'wheel', 'scroll', 'touchstart'];
 
@@ -172,6 +210,7 @@ export function useSupportMinutes(hubId, uid) {
     const counter = makeCounter(hubId);
     const active = () => counter.active();
     for (const name of ACTIVITY) window.addEventListener(name, active, { passive: true, capture: true });
+    listenToEmbeds();
 
     const flush = (leaving = false) => {
       if (!leaving && !counter.due()) return;
@@ -182,6 +221,7 @@ export function useSupportMinutes(hubId, uid) {
       });
     };
     const tick = () => {
+      askEmbeds();
       counter.tick({ visible: document.visibilityState === 'visible', playing: anyVideoPlaying() });
       flush();
     };
