@@ -4,7 +4,7 @@ import Button from '../components/Button.jsx';
 import { lookupUsername } from '../data/identity.js';
 import { amStaff } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
-import { decideReview, fetchReviewQueue, money, monthName, setAccountBlocked } from '../data/support.js';
+import { decideReview, fetchReviewQueue, fetchSupportRuns, money, monthName, setAccountBlocked } from '../data/support.js';
 import NeedsAccount from './NeedsAccount.jsx';
 import './EarningsReview.css';
 
@@ -120,8 +120,80 @@ function Queue() {
         </ul>
       )}
 
+      <Runs />
       <Exclude />
     </div>
+  );
+}
+
+// What the scheduled jobs did: each monthly close (the 5th) and each payout
+// run (the 15th), as the file service recorded them, newest first. Errors
+// included, so a month that failed to close is seen here and not only in
+// the Worker's logs.
+const KINDS = { close: 'Monthly close', payouts: 'Payouts' };
+const ERRORS = {
+  'no-stripe-key': 'No Stripe key at Mimyne's end, so nobody could be paid',
+  'month-open': 'The month had not ended',
+  'support-off': 'The program was switched off',
+};
+const SKIPS = {
+  'owner-not-verified': 'owner not verified',
+  'under-minimum': 'under the minimum',
+  'nothing-released': 'nothing released',
+  'account-just-changed': 'account just changed',
+  'paid-this-month': 'paid this month already',
+};
+
+function summary(run) {
+  const r = run.result ?? {};
+  if (run.kind === 'close') {
+    const flagged = Array.isArray(r.flagged) ? r.flagged.length : Number(r.flagged) || 0;
+    return `${r.members ?? 0} Plus ${r.members === 1 ? 'member' : 'members'}, ${r.hubs ?? 0} eligible ${r.hubs === 1 ? 'Hub' : 'Hubs'}: `
+      + `${money(r.assignedCents)} assigned, ${money(r.unassignedCents)} stays with Mimyne${flagged ? `, ${flagged} flagged for review` : ''}`;
+  }
+  const skipped = {};
+  for (const s of r.skipped ?? []) skipped[s.why] = (skipped[s.why] ?? 0) + 1;
+  const why = Object.entries(skipped).map(([k, n]) => `${n} ${SKIPS[k] ?? k}`).join(', ');
+  return `${r.paid ?? 0} ${r.paid === 1 ? 'Hub' : 'Hubs'} paid, ${money(r.cents)}${why ? `; not paid: ${why}` : ''}`;
+}
+
+function Runs() {
+  const [runs, setRuns] = useState(null);
+  const [problem, setProblem] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    fetchSupportRuns()
+      .then((data) => live && setRuns(data?.off ? [] : data?.runs ?? []))
+      .catch((error) => live && setProblem(error.message));
+    return () => { live = false; };
+  }, []);
+
+  return (
+    <section className="review-row">
+      <h2 className="review__h2">Runs</h2>
+      <p className="muted">What the monthly close on the 5th and the payout run on the 15th did, newest first.</p>
+      {problem && <p className="review__problem" role="alert">{problem}</p>}
+      {!runs && !problem && <p className="muted review-row__meta">Loading…</p>}
+      {runs && runs.length === 0 && <p className="muted review-row__meta">No runs recorded yet.</p>}
+      {runs && runs.length > 0 && (
+        <ul className="review__runs">
+          {runs.map((run) => (
+            <li key={`${run.kind}:${run.key}`} className={run.error ? 'is-failed' : ''}>
+              <span className="review__run-what">
+                <strong>{KINDS[run.kind] ?? run.kind}</strong>
+                {run.key && <span className="muted"> {monthName(run.key)}</span>}
+              </span>
+              <span className="review__run-when muted">
+                {run.at ? new Date(run.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                {run.by ? ' · by hand' : ''}
+              </span>
+              <span className="review__run-said">{run.error ? (ERRORS[run.error] ?? `Failed: ${run.error}`) : summary(run)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
