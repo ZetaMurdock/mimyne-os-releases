@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
 import Icon from '../components/Icon.jsx';
 import { usePerson } from '../data/people.js';
+import { ACTIONS, decideReport, fetchStandingOf } from '../data/moderation.js';
 import { REASONS, amStaff, setReportStatus, watchReports } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
 import { timeAgo } from '../lib/format.js';
@@ -88,10 +89,36 @@ function ReportList({ me }) {
   );
 }
 
+// What the target already has against them, for the row: from the file
+// service (files-worker/src/moderation.js), which holds the record.
+function standingLine(s) {
+  if (!s) return null;
+  const parts = [];
+  if (s.banned) parts.push('banned');
+  if (s.suspended) parts.push(`suspended until ${new Date(s.suspendedUntil).toLocaleDateString()}`);
+  if (s.muted) parts.push(`muted until ${new Date(s.mutedUntil).toLocaleDateString()}`);
+  if (s.strikes) parts.push(`${s.strikes} active ${s.strikes === 1 ? 'strike' : 'strikes'}`);
+  if (s.warnings) parts.push(`${s.warnings} ${s.warnings === 1 ? 'warning' : 'warnings'}`);
+  return parts.length ? parts.join(' · ') : 'nothing on record';
+}
+
 function ReportRow({ report: r, me, repeat, onError }) {
   const target = usePerson(r.targetUid);
   const reporter = usePerson(r.reporterUid);
   const [busy, setBusy] = useState(false);
+  const [standing, setStanding] = useState(null);
+  const [standingUnknown, setStandingUnknown] = useState(false);
+  const [note, setNote] = useState('');
+  const [days, setDays] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    if (r.status !== 'open') return undefined;
+    fetchStandingOf(r.targetUid)
+      .then((s) => live && (s ? setStanding(s) : setStandingUnknown(true)))
+      .catch(() => live && setStandingUnknown(true));
+    return () => { live = false; };
+  }, [r.targetUid, r.status]);
 
   async function mark(status) {
     setBusy(true);
@@ -99,6 +126,26 @@ function ReportRow({ report: r, me, repeat, onError }) {
       await setReportStatus(me, r.id, status);
     } catch {
       onError("That report couldn't be changed.");
+    }
+    setBusy(false);
+  }
+
+  // One decision: the file service records it, resolves the report with
+  // the outcome, and tells the person. A ban asks first. Dismissing is
+  // the one decision that changes nothing about the person, so it is the
+  // plain resolve, written here.
+  async function act(action) {
+    if (action === 'dismiss') { await mark('resolved'); return; }
+    if (action === 'ban' && !window.confirm(`Ban @${target.username}? They can read but never post again until cleared, and Hubs they own stop earning.`)) return;
+    setBusy(true);
+    try {
+      const extra = {};
+      if (note.trim()) extra.note = note.trim();
+      if ((action === 'mute' || action === 'suspend') && days) extra.days = Number(days);
+      const done = await decideReport(r.id, action, extra);
+      if (done?.standing) setStanding(done.standing);
+    } catch (error) {
+      onError(error.message || 'That could not be done.');
     }
     setBusy(false);
   }
@@ -124,12 +171,51 @@ function ReportRow({ report: r, me, repeat, onError }) {
         </span>
         <span className="report-row__spacer" />
         {r.link && <Button size="sm" variant="ghost" to={r.link}>Go to it</Button>}
-        {r.status === 'open' ? (
-          <Button size="sm" variant="inverse" icon="check" loading={busy} onClick={() => mark('resolved')}>Resolve</Button>
-        ) : (
+        {r.status !== 'open' && (
           <Button size="sm" variant="secondary" loading={busy} onClick={() => mark('open')}>Reopen</Button>
         )}
       </footer>
+      {r.status === 'open' && (
+        <div className="report-row__decide">
+          <p className="muted report-row__standing">
+            On record for @{target.username}: {standing ? standingLine(standing) : standingUnknown ? 'could not be read' : 'loading…'}
+          </p>
+          <div className="report-row__fields">
+            <input
+              className="report-row__note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="A note for them and for the log (optional)"
+              aria-label="Note"
+              maxLength={500}
+              disabled={busy}
+            />
+            <input
+              className="report-row__days"
+              value={days}
+              onChange={(e) => setDays(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+              placeholder="days"
+              aria-label="Days, for a mute or suspension"
+              inputMode="numeric"
+              disabled={busy}
+            />
+          </div>
+          <div className="report-row__actions">
+            {ACTIONS.filter((a) => a.id !== 'clear' || standing?.banned || standing?.muted || standing?.suspended).map((a) => (
+              <Button
+                key={a.id}
+                size="sm"
+                variant={a.id === 'dismiss' ? 'secondary' : a.id === 'ban' ? 'inverse' : 'ghost'}
+                title={a.hint}
+                disabled={busy}
+                onClick={() => act(a.id)}
+              >
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
     </li>
   );
 }

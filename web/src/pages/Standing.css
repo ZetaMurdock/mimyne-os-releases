@@ -1,0 +1,92 @@
+.standing {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.standing__title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.standing__lead {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.standing__problem {
+  color: var(--live);
+  margin: 0;
+}
+
+.standing__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.standing__section p {
+  margin: 0;
+}
+
+.standing__section--clean {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.standing__section--clean svg {
+  color: var(--approve);
+  flex: none;
+}
+
+.standing__section--now {
+  border-color: var(--live);
+}
+
+.standing__h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-heading);
+  font-weight: 600;
+  margin: 0;
+}
+
+.standing__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.standing__list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.standing__list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.standing__list li.is-past .standing__what {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.standing__when {
+  font-size: var(--t-caption);
+}
+
+.standing__note {
+  color: var(--text-2);
+}

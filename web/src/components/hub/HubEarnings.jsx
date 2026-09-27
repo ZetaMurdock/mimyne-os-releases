@@ -14,6 +14,7 @@ const CHECKS = [
   ['age', 'At least 30 days old'],
   ['contributors', 'At least 5 Plus members contributing this month'],
   ['active', 'At least 15 people active in the last 28 days'],
+  ['standing', 'Owner in good standing: no strike, mute, suspension or ban, and no open report'],
 ];
 
 export default function HubEarnings({ hub }) {

@@ -99,7 +99,7 @@ export async function sendMinutes(minutes, { fetchFn = fetch, token = idToken, k
 }
 
 /** The file service, asked as you. `{ off: true }` while the program is off; null when signed out. */
-async function ask(path, { method = 'GET', body } = {}) {
+export async function ask(path, { method = 'GET', body } = {}) {
   const bearer = await idToken().catch(() => null);
   if (!bearer) return null;
   const res = await fetch(`${FILES_URL}${path}`, {
