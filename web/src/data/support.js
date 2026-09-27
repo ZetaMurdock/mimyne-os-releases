@@ -129,6 +129,11 @@ export const decideReview = (hub, month, action) => ask('/support/review', { met
 /** Staff: flag an account for abuse, so nothing of theirs counts from now on - or unflag it. */
 export const setAccountBlocked = (uid, blocked) => ask('/support/block', { method: 'POST', body: { uid, blocked } });
 
+/** An owner's payout account with Stripe: set up, verified, what Stripe still needs; { off } or 503 while payouts are not set up. */
+export const fetchPayoutAccount = () => ask('/earnings/payout-account');
+/** Starts (or resumes) Stripe's onboarding for the owner: { url } to send them to. `replace` moves to a new account. */
+export const startPayouts = (replace = false) => ask('/earnings/payout-account', { method: 'POST', body: { replace } });
+
 /** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
 export async function fetchSupportState({ fetchFn = fetch } = {}) {
   try {

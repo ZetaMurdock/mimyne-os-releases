@@ -54,6 +54,15 @@ function SupportView() {
 
       {problem && <p className="support__problem" role="alert">{problem}</p>}
 
+      {new URLSearchParams(window.location.search).get('payouts') === 'done' && (
+        <p className="support__even" role="status">
+          <Icon name="check" size={16} /> Back from Stripe. Your Hub's Earnings tab shows how far your payout account got.
+        </p>
+      )}
+      {new URLSearchParams(window.location.search).get('payouts') === 'refresh' && (
+        <p className="muted" role="status">That Stripe link had expired. Press "Continue with Stripe" on your Hub's Earnings tab for a new one.</p>
+      )}
+
       {!mine && !problem && <p className="muted">Loading…</p>}
 
       {mine?.off && (

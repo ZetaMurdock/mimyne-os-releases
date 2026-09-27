@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import Button from '../Button.jsx';
 import Icon from '../Icon.jsx';
-import { fetchHubEarnings, money, monthName } from '../../data/support.js';
+import { fetchHubEarnings, fetchPayoutAccount, money, monthName, startPayouts } from '../../data/support.js';
 import './HubEarnings.css';
 
 // Hub → Earnings, for its owner: what the Hub would be owed this month if
@@ -82,7 +83,8 @@ export default function HubEarnings({ hub }) {
         </dl>
         <p className="muted earnings__note">
           A month's earnings are added on the 5th of the next month and held before they are released: 90 days for a new owner, the card-dispute
-          window. Payouts, once they begin, go out monthly from the released balance when it reaches $25; smaller balances carry over.
+          window, 30 once six months in a row have earned with nothing reversed. Payouts go out on the 15th from the released balance when it
+          reaches $25; smaller balances carry over.
         </p>
       </section>
 
@@ -101,6 +103,99 @@ export default function HubEarnings({ hub }) {
           minutes never count. You see counts here, never who.
         </p>
       </section>
+
+      <Payouts />
     </div>
+  );
+}
+
+// Where the money goes: the owner's Stripe account. Stripe checks who they
+// are and takes the tax details in its own pages; this only starts it and
+// says how far it got.
+const NEEDS = {
+  'individual.verification.document': 'a photo of your ID',
+  'individual.dob': 'your date of birth',
+  'individual.address.line1': 'your address',
+  external_account: 'a bank account or debit card to pay out to',
+  'tos_acceptance.date': "agreeing to Stripe's terms",
+};
+
+function Payouts() {
+  const [account, setAccount] = useState(null);
+  const [problem, setProblem] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetchPayoutAccount()
+      .then((data) => live && setAccount(data ?? { set: false }))
+      .catch((error) => live && (error.message === 'Payouts are not set up yet.' ? setAccount({ notReady: true }) : setProblem(error.message)));
+    return () => { live = false; };
+  }, []);
+
+  async function begin(replace = false) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const started = await startPayouts(replace);
+      if (started?.url) window.location.assign(started.url);
+    } catch (error) {
+      setProblem(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card earnings__card">
+      <h2 className="earnings__h2">Payouts</h2>
+      {problem && <p className="earnings__problem" role="alert">{problem}</p>}
+      {!account && !problem && <p className="muted">Loading…</p>}
+      {account?.notReady && <p className="muted">Payouts are not set up at Mimyne's end yet. Your balance keeps until they are.</p>}
+      {account?.off && <p className="muted">Plus supports Hubs isn't running.</p>}
+      {account && !account.notReady && !account.off && !account.set && (
+        <>
+          <p className="muted">
+            Earnings are paid through Stripe, which checks that you are 18 or older and takes the tax details it needs. You will be sent to Stripe
+            and brought back here.
+          </p>
+          <div className="review-row__actions">
+            <Button size="sm" variant="primary" loading={busy} onClick={() => begin(false)}>Set up payouts</Button>
+          </div>
+        </>
+      )}
+      {account?.set && (
+        <>
+          <dl className="earnings__facts">
+            <div>
+              <dt>Payout account</dt>
+              <dd>{account.status === 'verified' ? 'Verified' : account.status === 'pending' ? 'Being checked by Stripe' : 'Not finished'}</dd>
+            </div>
+            {account.pausedUntil && (
+              <div>
+                <dt>Paused until</dt>
+                <dd>{new Date(account.pausedUntil).toLocaleDateString()}</dd>
+              </div>
+            )}
+          </dl>
+          {account.needs?.length > 0 && (
+            <p className="muted">Stripe still needs {account.needs.map((n) => NEEDS[n] ?? n.replace(/[._]/g, ' ')).join(', ')}.</p>
+          )}
+          <div className="review-row__actions">
+            {account.status !== 'verified' && (
+              <Button size="sm" variant="primary" loading={busy} onClick={() => begin(false)}>Continue with Stripe</Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => { if (window.confirm('Move your payouts to a different Stripe account? Payouts pause for 7 days after a change.')) begin(true); }}
+            >
+              Change account
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
