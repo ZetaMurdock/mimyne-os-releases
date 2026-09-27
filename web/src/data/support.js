@@ -145,7 +145,10 @@ export async function fetchSupportState({ fetchFn = fetch } = {}) {
   }
 }
 
-export const money = (cents) => `$${((Number(cents) || 0) / 100).toFixed(2)}`;
+export const money = (cents) => {
+  const n = Number(cents) || 0;
+  return `${n < 0 ? '-' : ''}$${(Math.abs(n) / 100).toFixed(2)}`;
+};
 /** "September 2026" for "2026-09". */
 export const monthName = (month) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 

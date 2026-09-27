@@ -88,6 +88,8 @@ export default function HubEarnings({ hub }) {
         </p>
       </section>
 
+      <History entries={view.history ?? []} />
+
       <section className="card earnings__card">
         <h2 className="earnings__h2">{view.eligible ? 'Eligible to earn' : 'Not yet eligible'}</h2>
         <ul className="earnings__checks">
@@ -106,6 +108,47 @@ export default function HubEarnings({ hub }) {
 
       <Payouts />
     </div>
+  );
+}
+
+// The ledger, as the owner reads it: each month's earning, a reversal when a
+// Plus payment that funded a month was refunded, and each payout with its
+// Stripe reference. Newest first. Nothing in it is ever edited.
+const KINDS = { earning: 'Earned', reversal: 'Reversed', payout: 'Paid out', hub_pro: 'Hub Pro', adjustment: 'Adjustment' };
+const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+function standing(entry) {
+  if (entry.state === 'paid') return entry.at ? `Sent ${day(entry.at)}` : 'Sent';
+  if (entry.state === 'review') return 'Waiting for review';
+  if (entry.state === 'held') return entry.releaseAt ? `Held until ${day(entry.releaseAt)}` : 'Held';
+  if (entry.state === 'settled') return 'Paid out';
+  return 'Released';
+}
+
+function History({ entries }) {
+  return (
+    <section className="card earnings__card">
+      <h2 className="earnings__h2">History</h2>
+      {entries.length === 0 ? (
+        <p className="muted">Nothing recorded yet. A month's earning appears here once the month closes, and each payout with its reference.</p>
+      ) : (
+        <ul className="earnings__history">
+          {entries.map((entry) => (
+            <li key={entry.id} className={`earnings__entry is-${entry.kind}`}>
+              <span className="earnings__entry-what">
+                <strong>{KINDS[entry.kind] ?? entry.kind}</strong>
+                {entry.month && <span className="muted"> {monthName(entry.month)}</span>}
+              </span>
+              <span className="earnings__entry-state muted">
+                {standing(entry)}
+                {entry.reference && <span className="earnings__entry-ref"> {entry.reference}</span>}
+              </span>
+              <span className="earnings__entry-cents">{money(entry.cents)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
