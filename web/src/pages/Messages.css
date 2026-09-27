@@ -502,3 +502,8 @@
   width: 440px;
   max-width: 100%;
 }
+
+/* A YouTube Short stays narrow and upright. */
+.msg .linkp--tall {
+  width: 280px;
+}

@@ -9,6 +9,7 @@ import { useVotes } from '../useVotes.js';
 import { clipFromLink, clipRef, myMedal, removeClip, shareClip, watchClips } from '../../data/clips.js';
 import { usePerson } from '../../data/people.js';
 import { fileLink, uploadFile } from '../../lib/files.js';
+import { linkKind } from '../../lib/links.js';
 import { clipsPage } from '../../lib/medal.js';
 import { clipEmbedUrl, clipLength } from '../../lib/profileShapes.js';
 import { formatBytes, timeAgo } from '../../lib/format.js';
@@ -93,6 +94,13 @@ function ClipTile({ hub, clip, user, playing, onPlay, onStop, canRemove }) {
   const [fileUrl, setFileUrl] = useState(null);
   const [reporting, setReporting] = useState(false);
   const embed = clip.source === 'medal' ? clipEmbedUrl(clip.url) : null;
+  // A YouTube link plays in the tile: a video 16:9, a Short upright.
+  const youtube = useMemo(() => {
+    if (clip.source !== 'link') return null;
+    const kind = linkKind(clip.url);
+    return kind.provider === 'youtube' ? kind : null;
+  }, [clip.source, clip.url]);
+  const tall = youtube?.height === 'tall';
 
   useEffect(() => {
     if (clip.source !== 'file' || !clip.file || !user) return undefined;
@@ -132,12 +140,29 @@ function ClipTile({ hub, clip, user, playing, onPlay, onStop, canRemove }) {
         {clip.seconds > 0 && <span className="hclip__length">{clipLength(clip.seconds)}</span>}
       </button>
     );
+  } else if (youtube) {
+    frame = playing ? (
+      <iframe
+        className="hclip__embed"
+        src={youtube.src}
+        title={clip.title || (tall ? 'YouTube Short' : 'YouTube video')}
+        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+        referrerPolicy="strict-origin-when-cross-origin"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+      />
+    ) : (
+      <button type="button" className="hclip__poster hclip__poster--button" onClick={onPlay} aria-label={`Play ${clip.title || (tall ? 'this Short' : 'this video')}`}>
+        {youtube.thumb ? <img src={youtube.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{tall ? 'YouTube Short' : 'YouTube'}</span>}
+        <span className="hclip__play"><Icon name="play" size={16} /></span>
+        {tall && <span className="hclip__length">Short</span>}
+      </button>
+    );
   } else {
     frame = <div className="hclip__link"><LinkPreview url={clip.url} /></div>;
   }
 
   return (
-    <article className={`hclip ${playing ? 'is-playing' : ''}`}>
+    <article className={`hclip ${playing ? 'is-playing' : ''} ${tall ? 'is-tall' : ''}`}>
       <div className="hclip__frame">
         {frame}
         {playing && (
