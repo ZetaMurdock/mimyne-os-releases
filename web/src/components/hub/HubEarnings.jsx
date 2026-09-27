@@ -65,6 +65,28 @@ export default function HubEarnings({ hub }) {
       </section>
 
       <section className="card earnings__card">
+        <h2 className="earnings__h2">Balance</h2>
+        <dl className="earnings__facts">
+          <div>
+            <dt>Released</dt>
+            <dd>{money(view.balanceCents)}</dd>
+          </div>
+          <div>
+            <dt>Held</dt>
+            <dd>{money(view.heldCents)}</dd>
+          </div>
+          <div>
+            <dt>Next release</dt>
+            <dd>{view.nextReleaseAt ? new Date(view.nextReleaseAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'Nothing held'}</dd>
+          </div>
+        </dl>
+        <p className="muted earnings__note">
+          A month's earnings are added on the 5th of the next month and held before they are released: 90 days for a new owner, the card-dispute
+          window. Payouts, once they begin, go out monthly from the released balance when it reaches $25; smaller balances carry over.
+        </p>
+      </section>
+
+      <section className="card earnings__card">
         <h2 className="earnings__h2">{view.eligible ? 'Eligible to earn' : 'Not yet eligible'}</h2>
         <ul className="earnings__checks">
           {CHECKS.map(([key, label]) => (

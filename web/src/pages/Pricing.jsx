@@ -6,6 +6,7 @@ import { watchHubPro, watchMyPlans } from '../data/billing.js';
 import { useSession } from '../data/session.jsx';
 import { auth } from '../lib/firebase.js';
 import { COMPARE, PRICES, checkoutUrl, money, onSale } from '../lib/plans.js';
+import { fetchSupportState } from '../data/support.js';
 import './Pricing.css';
 
 const YEARLY_SAVING = PRICES.plus.amount * 12 - PRICES.plus_yearly.amount;
@@ -20,6 +21,9 @@ export default function Pricing() {
   const [mine, setMine] = useState({ deep: null, plus: null });
 
   useEffect(() => (user ? watchMyPlans(user.uid, setMine) : setMine({ deep: null, plus: null })), [user?.uid]);
+  // Plus supports Hubs is mentioned only once the program is live.
+  const [support, setSupport] = useState('off');
+  useEffect(() => { fetchSupportState().then(setSupport); }, []);
 
   const buyer = user ? { uid: user.uid, email: auth.currentUser?.email ?? undefined } : null;
   const plusPlan = yearly ? 'plus_yearly' : 'plus';
@@ -96,6 +100,12 @@ export default function Pricing() {
           </table>
         </div>
         <p className="pricing__fine">Plus features are planned for launch and still being tested. Conversion size depends on the format.</p>
+        {support === 'on' && (
+          <p className="pricing__fine">
+            Your Plus supports the Hubs you use: part of every subscription goes to the Hubs you spend time in, and owners sell nothing.{' '}
+            <a href="/plus-supports-hubs.html">How it works</a>
+          </p>
+        )}
       </section>
 
       <HubPro buyer={buyer} onSignIn={signIn} />

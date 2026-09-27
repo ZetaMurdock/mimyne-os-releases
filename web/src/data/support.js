@@ -122,6 +122,17 @@ export const saveSupportEven = (even) => ask('/support/me', { method: 'POST', bo
 /** A Hub's month as its owner sees it: the estimate, contributors, active people, eligibility. */
 export const fetchHubEarnings = (hubId, month) => ask(withMonth(`/earnings/hub/${encodeURIComponent(hubId)}`, month));
 
+/** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
+export async function fetchSupportState({ fetchFn = fetch } = {}) {
+  try {
+    const res = await fetchFn(`${FILES_URL}/support/state`);
+    const data = res.ok ? await res.json() : null;
+    return ['measure', 'on'].includes(data?.state) ? data.state : 'off';
+  } catch {
+    return 'off';
+  }
+}
+
 export const money = (cents) => `$${((Number(cents) || 0) / 100).toFixed(2)}`;
 /** "September 2026" for "2026-09". */
 export const monthName = (month) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
