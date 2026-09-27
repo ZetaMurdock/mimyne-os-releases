@@ -68,14 +68,16 @@ button.linkp__card:hover {
   font: inherit;
 }
 
-.linkp__card--embed.is-wide {
+.linkp__card--embed.is-wide,
+.linkp__card--embed.is-tall {
   flex-direction: column;
   align-items: stretch;
   padding: 0;
   overflow: hidden;
 }
 
-.linkp__card--embed.is-wide .linkp__text {
+.linkp__card--embed.is-wide .linkp__text,
+.linkp__card--embed.is-tall .linkp__text {
   padding: 10px 14px 12px;
 }
 
@@ -145,6 +147,16 @@ button.linkp__card:hover {
   background: #0d0d0e;
 }
 
+/* A Short stands upright. Its picture is YouTube's 4:3 one with the
+   video in the middle, so cropping to 9:16 keeps just the video. */
+.linkp--tall {
+  max-width: 280px;
+}
+
+.linkp__cover.is-tall {
+  aspect-ratio: 9 / 16;
+}
+
 .linkp__cover-blank {
   position: absolute;
   inset: 0;
@@ -196,6 +208,10 @@ button.linkp__card:hover {
 
 .linkp__player.is-wide {
   aspect-ratio: 16 / 9;
+}
+
+.linkp__player.is-tall {
+  aspect-ratio: 9 / 16;
 }
 
 .linkp__player iframe {

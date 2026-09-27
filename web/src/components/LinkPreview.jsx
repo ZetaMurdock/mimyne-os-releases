@@ -58,7 +58,7 @@ export default function LinkPreview({ url }) {
   else if (kind.kind === 'embed') body = <EmbedCard url={url} kind={kind} />;
   else body = <PageCard url={url} />;
   return (
-    <div className="linkp" title={url}>
+    <div className={`linkp ${kind.height === 'tall' ? 'linkp--tall' : ''}`} title={url}>
       {body}
       <a className="linkp__url" href={url} target="_blank" rel="noopener noreferrer nofollow">
         <Icon name="link" size={11} /> {url}
@@ -85,10 +85,13 @@ function EmbedCard({ url, kind }) {
   const [playing, setPlaying] = useState(false);
   const info = useUnfurl(url, kind.provider !== 'medal');
   const picture = info?.image || kind.thumb;
-  const wide = kind.height === 'wide';
+  // 'wide' is a 16:9 video, 'tall' a 9:16 Short; a number is a player's fixed height.
+  const tall = kind.height === 'tall';
+  const wide = kind.height === 'wide' || tall;
+  const shape = tall ? 'is-tall' : wide ? 'is-wide' : '';
   if (playing) {
     return (
-      <div className={`linkp__player ${wide ? 'is-wide' : ''}`} style={wide ? undefined : { height: kind.height }}>
+      <div className={`linkp__player ${shape}`} style={wide ? undefined : { height: kind.height }}>
         <iframe
           src={kind.src}
           title={info?.title || `${LABELS[kind.provider]} player`}
@@ -100,9 +103,9 @@ function EmbedCard({ url, kind }) {
     );
   }
   return (
-    <button type="button" className={`linkp__card linkp__card--embed ${wide ? 'is-wide' : ''}`} onClick={() => setPlaying(true)} aria-label={`Play ${info?.title || `on ${LABELS[kind.provider]}`}`}>
+    <button type="button" className={`linkp__card linkp__card--embed ${shape}`} onClick={() => setPlaying(true)} aria-label={`Play ${info?.title || `on ${LABELS[kind.provider]}`}`}>
       {wide ? (
-        <span className="linkp__cover">
+        <span className={`linkp__cover ${tall ? 'is-tall' : ''}`}>
           {picture ? <img src={picture} alt="" loading="lazy" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} /> : <span className="linkp__cover-blank" />}
           <span className="linkp__play">
             <Icon name="play" size={16} />
@@ -117,7 +120,7 @@ function EmbedCard({ url, kind }) {
         </span>
       )}
       <span className="linkp__text">
-        <span className="linkp__site">{LABELS[kind.provider]}</span>
+        <span className="linkp__site">{tall ? 'YouTube Shorts' : LABELS[kind.provider]}</span>
         <strong className="linkp__title">{info?.title || (kind.provider === 'medal' ? 'Medal clip' : hostOf(url))}</strong>
         {info?.description && <span className="linkp__desc">{info.description}</span>}
       </span>

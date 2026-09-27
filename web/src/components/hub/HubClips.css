@@ -48,6 +48,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
+  align-items: start;
 }
 
 .hclip {
@@ -70,6 +71,22 @@
   position: relative;
   aspect-ratio: 16 / 9;
   background: #0c0c0d;
+}
+
+/* A YouTube Short stands upright, the way it was filmed: 9:16 in the
+   middle of the tile, at a height that still fits beside the videos. */
+.hclip.is-tall .hclip__frame {
+  display: flex;
+  justify-content: center;
+  height: 480px;
+  aspect-ratio: auto;
+}
+
+.hclip.is-tall .hclip__embed,
+.hclip.is-tall .hclip__poster {
+  flex: none;
+  width: 270px;
+  max-width: 100%;
 }
 
 .hclip__video,

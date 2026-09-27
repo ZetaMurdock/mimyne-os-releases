@@ -56,6 +56,17 @@ const IMAGE = /\.(png|jpe?g|gif|webp|avif|bmp)$/i;
 const VIDEO = /\.(mp4|webm|mov|m4v)$/i;
 const AUDIO = /\.(mp3|ogg|oga|wav|m4a|aac|flac|opus)$/i;
 
+/** A YouTube Short: youtube.com/shorts/<id> (what the Shorts share button gives). */
+export function isShort(link) {
+  try {
+    const url = link instanceof URL ? link : new URL(link);
+    const host = url.hostname.toLowerCase().replace(/^(www|m)\./, '');
+    return host === 'youtube.com' && /^\/shorts\/[A-Za-z0-9_-]{6,20}\/?$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 /** What a link is, for how to preview it. */
 export function linkKind(link) {
   let url;
@@ -77,7 +88,9 @@ export function linkKind(link) {
   const player = musicPlayer(link);
   if (player?.provider === 'youtube') {
     const id = host === 'youtu.be' ? url.pathname.slice(1) : url.searchParams.get('v') || url.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/)?.[1];
-    return { kind: 'embed', provider: 'youtube', src: player.src, height: 'wide', thumb: id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null };
+    // A Short is filmed upright, so it plays upright (9:16), not squeezed into a 16:9 box.
+    const tall = !player.playlist && isShort(url);
+    return { kind: 'embed', provider: 'youtube', src: player.src, height: tall ? 'tall' : 'wide', thumb: id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null };
   }
   if (player?.provider === 'spotify') return { kind: 'embed', provider: 'spotify', src: player.src, height: player.playlist ? 352 : 152 };
   if (player?.provider === 'soundcloud') return { kind: 'embed', provider: 'soundcloud', src: player.src, height: player.playlist ? 300 : 166 };

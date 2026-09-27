@@ -218,6 +218,11 @@
   max-width: 440px;
 }
 
+/* A YouTube Short stays narrow and upright. */
+.room-msg .linkp--tall {
+  max-width: 280px;
+}
+
 .room-msg__reply {
   position: relative;
   display: flex;
