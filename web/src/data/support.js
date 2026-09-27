@@ -126,6 +126,8 @@ export const fetchHubEarnings = (hubId, month) => ask(withMonth(`/earnings/hub/$
 export const fetchReviewQueue = (status = 'open') => ask(`/support/review?status=${encodeURIComponent(status)}`);
 /** Staff: release a flagged month's earning into the ordinary hold, or keep it held. */
 export const decideReview = (hub, month, action) => ask('/support/review', { method: 'POST', body: { hub, month, action } });
+/** Staff: flag an account for abuse, so nothing of theirs counts from now on - or unflag it. */
+export const setAccountBlocked = (uid, blocked) => ask('/support/block', { method: 'POST', body: { uid, blocked } });
 
 /** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
 export async function fetchSupportState({ fetchFn = fetch } = {}) {

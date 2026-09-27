@@ -53,6 +53,24 @@
   margin: 0;
 }
 
+.review__h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-heading);
+  font-weight: 600;
+  margin: 0;
+}
+
+.review__input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  padding: 6px 10px;
+}
+
 .review__none {
   margin: 0;
 }

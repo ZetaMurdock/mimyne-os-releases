@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/Button.jsx';
+import { lookupUsername } from '../data/identity.js';
 import { amStaff } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
-import { decideReview, fetchReviewQueue, money, monthName } from '../data/support.js';
+import { decideReview, fetchReviewQueue, money, monthName, setAccountBlocked } from '../data/support.js';
 import NeedsAccount from './NeedsAccount.jsx';
 import './EarningsReview.css';
 
@@ -118,6 +119,48 @@ function Queue() {
           ))}
         </ul>
       )}
+
+      <Exclude />
     </div>
+  );
+}
+
+// An account flagged for abuse counts nothing from then on: the plan's
+// last exclusion. By username, so nobody has to find a uid.
+function Exclude() {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState(null);
+
+  async function apply(blocked) {
+    const username = name.trim().replace(/^@/, '');
+    if (!username) return;
+    setBusy(true);
+    setSaid(null);
+    try {
+      const uid = await lookupUsername(username);
+      if (!uid) { setSaid(`There is no @${username}.`); return; }
+      const done = await setAccountBlocked(uid, blocked);
+      if (done?.off) { setSaid("Plus supports Hubs isn't running."); return; }
+      setSaid(blocked ? `@${username} counts nothing from now on.` : `@${username} counts again.`);
+      setName('');
+    } catch (error) {
+      setSaid(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="review-row">
+      <h2 className="review__h2">Exclude an account</h2>
+      <p className="muted">An account flagged for abuse counts nothing towards any Hub from now on. Its earlier months stay as they were closed.</p>
+      <form className="review-row__actions" onSubmit={(e) => { e.preventDefault(); apply(true); }}>
+        <input className="review__input" value={name} onChange={(e) => setName(e.target.value)} placeholder="username" aria-label="Username to exclude" disabled={busy} />
+        <Button type="submit" size="sm" variant="primary" loading={busy} disabled={!name.trim()}>Exclude</Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy || !name.trim()} onClick={() => apply(false)}>Count again</Button>
+      </form>
+      {said && <p className="muted review-row__meta" role="status">{said}</p>}
+    </section>
   );
 }
