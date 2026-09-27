@@ -87,11 +87,62 @@ export async function sendMinutes(minutes, { fetchFn = fetch, token = idToken, k
       body: JSON.stringify({ minutes }),
     });
     if (res.status === 404 || res.status === 401) stopped = true;
+    // Opted out: the file service records nothing, so there is nothing to send.
+    if (res.ok && typeof res.json === 'function') {
+      const answer = await res.json().catch(() => null);
+      if (answer?.reason === 'opted-out') stopped = true;
+    }
     return res.ok;
   } catch {
     return false;
   }
 }
+
+/** The file service, asked as you. `{ off: true }` while the program is off; null when signed out. */
+async function ask(path, { method = 'GET', body } = {}) {
+  const bearer = await idToken().catch(() => null);
+  if (!bearer) return null;
+  const res = await fetch(`${FILES_URL}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${bearer}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404 && data.error === 'support-off') return { off: true };
+  if (!res.ok) throw new Error(data.message || data.error || `The file service answered ${res.status}.`);
+  return data;
+}
+
+const withMonth = (path, month) => (month ? `${path}?month=${encodeURIComponent(month)}` : path);
+
+/** Your month: whether you have Plus, your opt-out, and where your support goes (estimated). */
+export const fetchMySupport = (month) => ask(withMonth('/support/me', month));
+/** The opt-out: split my support evenly between the Hubs I pledge to, and record none of my minutes. */
+export const saveSupportEven = (even) => ask('/support/me', { method: 'POST', body: { even } });
+/** A Hub's month as its owner sees it: the estimate, contributors, active people, eligibility. */
+export const fetchHubEarnings = (hubId, month) => ask(withMonth(`/earnings/hub/${encodeURIComponent(hubId)}`, month));
+
+/** Staff: the Hubs flagged at a close ('open'), or those already decided ('released', 'held'). */
+export const fetchReviewQueue = (status = 'open') => ask(`/support/review?status=${encodeURIComponent(status)}`);
+/** Staff: release a flagged month's earning into the ordinary hold, or keep it held. */
+export const decideReview = (hub, month, action) => ask('/support/review', { method: 'POST', body: { hub, month, action } });
+/** Staff: flag an account for abuse, so nothing of theirs counts from now on - or unflag it. */
+export const setAccountBlocked = (uid, blocked) => ask('/support/block', { method: 'POST', body: { uid, blocked } });
+
+/** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
+export async function fetchSupportState({ fetchFn = fetch } = {}) {
+  try {
+    const res = await fetchFn(`${FILES_URL}/support/state`);
+    const data = res.ok ? await res.json() : null;
+    return ['measure', 'on'].includes(data?.state) ? data.state : 'off';
+  } catch {
+    return 'off';
+  }
+}
+
+export const money = (cents) => `$${((Number(cents) || 0) / 100).toFixed(2)}`;
+/** "September 2026" for "2026-09". */
+export const monthName = (month) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 /** Whether a video on the page is playing (a Clip, an attached video). */
 export const anyVideoPlaying = (root = document) =>

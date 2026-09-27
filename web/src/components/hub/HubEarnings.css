@@ -1,0 +1,91 @@
+.earnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.earnings__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.earnings__h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-heading);
+  font-weight: 600;
+  margin: 0;
+}
+
+.earnings__big {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.earnings__tag {
+  font-family: var(--font-body);
+  font-size: var(--t-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+}
+
+.earnings__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.earnings__facts dt {
+  font-size: var(--t-caption);
+  color: var(--text-3);
+}
+
+.earnings__facts dd {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-body);
+}
+
+.earnings__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.earnings__checks li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--text-2);
+}
+
+.earnings__checks li.is-met {
+  color: var(--text);
+}
+
+.earnings__checks li.is-met svg {
+  color: var(--approve);
+}
+
+.earnings__note {
+  margin: 0;
+}
+
+.earnings__problem {
+  color: var(--live);
+}

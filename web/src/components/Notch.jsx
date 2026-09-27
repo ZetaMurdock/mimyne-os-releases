@@ -224,7 +224,9 @@ function Notch() {
           <MenuItem as={Link} to="/hubs/new">Start a Hub</MenuItem>
           <MenuItem as={Link} to="/pricing">Plans and pricing</MenuItem>
           <MenuItem as={Link} to="/settings/security">Security</MenuItem>
+          <MenuItem as={Link} to="/settings/support">Your support</MenuItem>
           {staff && <MenuItem as={Link} to="/staff/reports">Reports</MenuItem>}
+          {staff && <MenuItem as={Link} to="/staff/earnings">Earnings review</MenuItem>}
           <MenuItem onClick={signOut}>Sign out</MenuItem>
         </Menu>
         <Menu
