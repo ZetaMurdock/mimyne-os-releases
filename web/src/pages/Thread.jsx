@@ -13,7 +13,8 @@ import './Thread.css';
 // /h/<hub>/p/<post> for a post on a Hub's Board, /people/<uid>/p/<post> for
 // one on someone's profile.
 export function threadLoader({ params }) {
-  return getPost(params.hubId ? { hubId: params.hubId } : { profileUid: params.uid }, params.postId);
+  const scope = params.hubId ? { hubId: params.hubId, ...(params.boardId ? { boardId: params.boardId } : {}) } : { profileUid: params.uid };
+  return getPost(scope, params.postId);
 }
 
 export default function Thread() {
@@ -55,7 +56,7 @@ export default function Thread() {
   return (
     <div className="frame">
       <div className="frame__main">
-        <Link to={hub ? `/h/${hub.id}` : user ? '/feed' : '/'} className="thread__back">
+        <Link to={hub ? `/h/${hub.id}${post.scope.boardId ? `?tab=board&board=${post.scope.boardId}` : ''}` : user ? '/feed' : '/'} className="thread__back">
           <Icon name="back" size={16} strokeWidth={2} />
           {hub ? hub.name : user ? 'Feed' : 'Home'}
         </Link>

@@ -116,6 +116,8 @@ function send(me, to, id, record) {
  * is ({hubId} or {profileUid}); `commentId` when it's on a comment.
  */
 export function notifyVote(me, { scope, postId, commentId, authorUid, vote }) {
+  // A post in a Board room: the notice rules do not know rooms yet.
+  if (scope?.boardId) return Promise.resolve();
   if (!vote) return Promise.resolve();
   const onComment = !!commentId;
   const target = scope.hubId ? (onComment ? 'hub_comment' : 'hub_post') : (onComment ? 'post_comment' : 'profile_post');
@@ -128,6 +130,7 @@ export function notifyVote(me, { scope, postId, commentId, authorUid, vote }) {
 
 /** A comment, told to the post's author, or a reply to the comment's author. */
 export function notifyComment(me, { scope, postId, commentId, parentId, text: words, toUid }) {
+  if (scope?.boardId) return Promise.resolve();
   const place = scope.hubId ? { hubId: scope.hubId } : { ownerUid: scope.profileUid };
   const key = scope.hubId ? `h_${scope.hubId}` : `p_${scope.profileUid}`;
   return send(me, toUid, `comment__${key}__${postId}__${commentId}`, {

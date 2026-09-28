@@ -1,0 +1,108 @@
+/* The rooms inside the Board: pills, the Board itself first. */
+.board-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.board-rooms__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.board-rooms__pill:hover {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.board-rooms__pill.is-on {
+  border-color: var(--text);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.board-rooms__add {
+  border-style: dashed;
+  font-weight: 500;
+}
+
+.board-room__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px;
+}
+
+.board-room__text {
+  display: flex;
+  flex-grow: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.board-room__text .muted {
+  font-size: 13px;
+}
+
+.board-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board-form__access {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.board-form__access legend {
+  padding: 0 4px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.board-form__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.board-form__row select {
+  max-width: 60%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.board-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.board-form__spacer {
+  flex-grow: 1;
+}

@@ -5,6 +5,7 @@ import { plainText } from '../lib/messageFormat.js';
 import { cleanReactions } from '../lib/reactions.js';
 import { cleanFolders } from '../lib/hubFolders.js';
 import { cleanHubLook, cleanPages } from '../lib/hubLook.js';
+import { cleanBoard } from '../lib/hubBoards.js';
 import {
   addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
@@ -121,11 +122,44 @@ export async function readOrMissing(ref) {
 // --------------------------------------------------------------- where
 
 /** A post lives on a Hub's Board or on someone's profile. */
-export const postsOf = (scope) =>
-  scope.hubId ? collection(db, 'hubs', scope.hubId, 'posts') : collection(db, 'profile_pages', scope.profileUid, 'posts');
+// Where posts live: a Hub's Board, a room inside it (lib/hubBoards.js), or
+// a profile page.
+export const postsOf = (scope) => (scope.hubId
+  ? (scope.boardId ? collection(db, 'hubs', scope.hubId, 'boards', scope.boardId, 'posts') : collection(db, 'hubs', scope.hubId, 'posts'))
+  : collection(db, 'profile_pages', scope.profileUid, 'posts'));
 export const postRef = (scope, id) => doc(postsOf(scope), id);
-export const postUrl = (post) =>
-  post.scope.hubId ? `/h/${post.scope.hubId}/p/${post.id}` : `/people/${post.scope.profileUid}/p/${post.id}`;
+export const postUrl = (post) => (post.scope.hubId
+  ? (post.scope.boardId ? `/h/${post.scope.hubId}/b/${post.scope.boardId}/p/${post.id}` : `/h/${post.scope.hubId}/p/${post.id}`)
+  : `/people/${post.scope.profileUid}/p/${post.id}`);
+
+// ------------------------------------------------------------ board rooms
+// Places inside a Hub's Board where a group talks (lib/hubBoards.js): made
+// by the owner and mods, each saying who may see it and who may post.
+
+export function watchBoards(hubId, onChange, onError) {
+  return onSnapshot(
+    collection(db, 'hubs', hubId, 'boards'),
+    (snap) => onChange(snap.docs.map((d) => cleanBoard(d.id, d.data())).filter(Boolean).sort((a, b) => a.order - b.order)),
+    onError,
+  );
+}
+export function createBoard(hubId, boardId, { name, topic, access, order = 0 }, me = auth.currentUser) {
+  return setDoc(doc(db, 'hubs', hubId, 'boards', boardId), withoutEmpty({
+    name: name.trim(), topic: topic?.trim(), order, access, createdBy: me.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+}
+export function updateBoard(hubId, boardId, { name, topic, access, order }) {
+  return updateDoc(doc(db, 'hubs', hubId, 'boards', boardId), {
+    ...(name !== undefined ? { name: name.trim() } : {}),
+    ...(topic !== undefined ? { topic: topic.trim() } : {}),
+    ...(access !== undefined ? { access } : {}),
+    ...(order !== undefined ? { order } : {}),
+    updatedAt: serverTimestamp(),
+  });
+}
+export function deleteBoard(hubId, boardId) {
+  return deleteDoc(doc(db, 'hubs', hubId, 'boards', boardId));
+}
 
 // ------------------------------------------------------------------- hubs
 
