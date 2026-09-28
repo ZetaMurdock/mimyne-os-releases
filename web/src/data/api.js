@@ -1,6 +1,7 @@
 // Everything the site reads and writes, against the same Firestore as the
 // app. The rules in the app's repo (firestore.rules, "hubs" and "messages")
 // decide who may do what; this file only asks.
+import { plainText } from '../lib/messageFormat.js';
 import {
   addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
@@ -574,7 +575,7 @@ export async function sendMessage(convoId, uid, { text: words, files, post, prof
     createdAt: serverTimestamp(),
   }));
   const onlyGif = /^https:\/\/\S+\.(gif|webp)(\?\S*)?$/i.test(words?.trim() ?? '');
-  const preview = (onlyGif ? 'Sent a GIF' : words?.trim())
+  const preview = (onlyGif ? 'Sent a GIF' : plainText(words))
     || (files?.length ? `Sent ${files.length === 1 ? files[0].name : `${files.length} files`}` : '')
     || (post ? 'Shared a post' : profileUid ? 'Shared a profile' : '');
   await updateDoc(doc(db, 'conversations', convoId), { lastAt: serverTimestamp(), lastFrom: uid, lastText: preview.slice(0, 200) });
