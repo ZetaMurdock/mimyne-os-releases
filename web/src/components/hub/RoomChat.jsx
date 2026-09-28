@@ -5,14 +5,15 @@ import Icon from '../Icon.jsx';
 import MediaPicker from '../MediaPicker.jsx';
 import ShareDialog from '../ShareDialog.jsx';
 import ReportDialog from '../ReportDialog.jsx';
-import LinkPreview, { Linkify } from '../LinkPreview.jsx';
+import LinkPreview from '../LinkPreview.jsx';
+import MessageText from '../MessageText.jsx';
+import { applyFormatKey } from '../../lib/composer.js';
 import { SharedPost, SharedProfile } from '../ShareCards.jsx';
 import { FileCard, PendingFile } from '../FileCard.jsx';
 import { deleteRoomMessage, editRoomMessage, sendRoomMessage, watchRoomMessages } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { uploadPicked } from '../../lib/files.js';
 import { insertAt, placeCaret } from '../../lib/insert.js';
-import { splitLinks } from '../../lib/links.js';
 import './RoomChat.css';
 
 const PAGE = 150;
@@ -181,6 +182,11 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
   }
 
   function onKeyDown(e) {
+    // Ctrl+B/I/U and the rest format what is selected (lib/composer.js).
+    if (applyFormatKey(e, e.currentTarget, setText)) {
+      e.preventDefault();
+      return;
+    }
     if (mention && suggestions.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -433,25 +439,17 @@ function MentionOption({ member, role, active, onPick }) {
 }
 
 /** Words with @mentions picked out and links clickable; link previews under. */
+// The words, formatted the way they were written (components/MessageText.jsx),
+// with a mention linking to the person and the first links previewed below.
 function RoomText({ text, edited }) {
-  const { rest, links } = splitLinks(text);
-  const pieces = rest ? rest.split(/((?:^|(?<=\s))@[A-Za-z0-9_.]{2,24})/) : [];
   return (
-    <>
-      {rest && (
-        <p className="room-msg__text">
-          {pieces.map((piece, i) => (/^@[A-Za-z0-9_.]{2,24}$/.test(piece) ? (
-            <a key={i} className="room-msg__mention" href={`/u/${piece.slice(1)}`}>{piece}</a>
-          ) : (
-            <Linkify key={i} text={piece} />
-          )))}
-          {edited && <span className="room-msg__edited"> (edited)</span>}
-        </p>
-      )}
-      {links.map((url) => (
-        <LinkPreview key={url} url={url} />
-      ))}
-    </>
+    <MessageText
+      text={text}
+      className="room-msg__text"
+      preview={(url) => <LinkPreview key={url} url={url} />}
+      mention={(name) => <a className="room-msg__mention" href={`/u/${name}`}>@{name}</a>}
+      after={edited && <span className="room-msg__edited"> (edited)</span>}
+    />
   );
 }
 

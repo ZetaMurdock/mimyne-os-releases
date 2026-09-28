@@ -10,7 +10,10 @@ import MediaPicker from '../components/MediaPicker.jsx';
 import { StatusLine } from '../components/Presence.jsx';
 import { insertAt, placeCaret } from '../lib/insert.js';
 import { SharedPost, SharedProfile } from '../components/ShareCards.jsx';
-import { LinkedText } from '../components/LinkPreview.jsx';
+import LinkPreview from '../components/LinkPreview.jsx';
+import MessageText from '../components/MessageText.jsx';
+import { applyFormatKey } from '../lib/composer.js';
+import { plainText } from '../lib/messageFormat.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
   deleteMessage, editMessage, getHubCard, openDirect, sendMessage, watchConversations, watchMessages,
@@ -165,9 +168,10 @@ function Conversation({ convo, me }) {
       await sendMessage(convo.id, me.uid, {
         text,
         files: labels,
-        replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: replyTo.text || describeAttachment(replyTo) } : null,
+        replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null,
       });
       setText('');
+      if (input.current) input.current.style.height = 'auto';
       setFiles([]);
       setReplyTo(null);
     } catch (err) {
@@ -188,7 +192,7 @@ function Conversation({ convo, me }) {
   // message, the way chat apps do it.
   async function sendMedia(media) {
     setError(null);
-    const reply = replyTo ? { id: replyTo.id, from: replyTo.from, text: replyTo.text || describeAttachment(replyTo) } : null;
+    const reply = replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null;
     const item = media.kind === 'library' ? media.item : null;
     try {
       if (item?.kind === 'file') {
@@ -295,15 +299,26 @@ function Conversation({ convo, me }) {
             />
             <Button variant="ghost" icon="paperclip" iconOnly aria-label="Attach a file" onClick={() => fileInput.current.click()} />
             <MediaPicker onEmoji={addEmoji} onPick={sendMedia} placement="up" />
-            <input
+            {/* Enter sends, Shift+Enter is a new line (for a quote, a list or a
+                code block), Ctrl+B/I/U format what is selected (lib/composer.js). */}
+            <textarea
               ref={input}
-              className="inbox__input"
+              className="inbox__input inbox__input--area"
+              rows={1}
               aria-label={`Message ${title}`}
               placeholder={`Message ${title}. Any file, any size.`}
               maxLength={4000}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && replyTo && setReplyTo(null)}
+              onInput={(e) => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 200)}px`; }}
+              onKeyDown={(e) => {
+                if (applyFormatKey(e, e.currentTarget, setText)) { e.preventDefault(); return; }
+                if (e.key === 'Escape' && replyTo) setReplyTo(null);
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               // Pictures and GIFs pasted straight in go along as files.
               onPaste={(e) => {
                 if (e.clipboardData.files.length) {
@@ -395,7 +410,7 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
           <Icon name="reply" size={12} />
           <span>
             {message.replyTo.from === meUid ? 'You' : quoted.name}:{' '}
-            {answered ? answered.text || describeAttachment(answered) : message.replyTo.text || 'a deleted message'}
+            {answered ? plainText(answered.text) || describeAttachment(answered) : plainText(message.replyTo.text) || 'a deleted message'}
           </span>
         </button>
       )}
@@ -407,22 +422,29 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
             onSaveEdit(draft);
           }}
         >
-          <input
-            className="inbox__input msg__edit-input"
+          <textarea
+            className="inbox__input inbox__input--area msg__edit-input"
             autoFocus
+            rows={1}
             maxLength={4000}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && onCancelEdit()}
+            onInput={(e) => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 200)}px`; }}
+            onKeyDown={(e) => {
+              if (applyFormatKey(e, e.currentTarget, setDraft)) { e.preventDefault(); return; }
+              if (e.key === 'Escape') onCancelEdit();
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSaveEdit(draft); }
+            }}
             aria-label="Edit message"
           />
-          <span className="msg__edit-hint">Enter to save · Esc to cancel</span>
+          <span className="msg__edit-hint">Enter to save · Shift+Enter for a new line · Esc to cancel</span>
         </form>
       ) : (
         message.text && (
-          <LinkedText
+          <MessageText
             text={message.text}
             className="msg__bubble"
+            preview={(url) => <LinkPreview key={url} url={url} />}
             after={message.edited && <span className="msg__edited"> (edited)</span>}
           />
         )

@@ -1,0 +1,125 @@
+/* A formatted message (components/MessageText.jsx). Inline marks keep the
+   message's own font; blocks stack with small gaps, like a chat. */
+.fmt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fmt > * + * {
+  margin-top: 4px;
+}
+
+.fmt__p,
+.fmt__quote {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.fmt__line + .fmt__line::before {
+  content: '\A';
+  white-space: pre;
+}
+
+.fmt__code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.18);
+}
+
+.fmt__pre {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-sm, 6px);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.fmt__pre[data-language]::before {
+  content: attr(data-language);
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-body);
+  font-size: var(--t-caption);
+  color: var(--text-3);
+  text-transform: lowercase;
+}
+
+.fmt__quote {
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--text-2);
+}
+
+.fmt__h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.fmt__h1 { font-size: 1.35em; }
+.fmt__h2 { font-size: 1.2em; }
+.fmt__h3 { font-size: 1.05em; }
+
+.fmt__subtext {
+  font-size: var(--t-caption);
+  color: var(--text-3);
+}
+
+.fmt__list {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.fmt__item--nested {
+  margin-left: 18px;
+  list-style-type: circle;
+}
+
+.fmt__link {
+  color: var(--accent, #7c3aed);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fmt__mention {
+  padding: 0 3px;
+  border-radius: 4px;
+  font-weight: 600;
+  color: var(--accent, #7c3aed);
+  background: rgba(124, 58, 237, 0.14);
+}
+
+/* Hidden until it is clicked; then just text with a faint background, so
+   what was hidden is still seen to have been. */
+.fmt__spoiler {
+  border-radius: 4px;
+  padding: 0 2px;
+  background: var(--text, #f2eefa);
+  color: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.fmt__spoiler:not(.is-shown) * {
+  color: transparent;
+}
+
+.fmt__spoiler:not(.is-shown) a,
+.fmt__spoiler:not(.is-shown) .fmt__code {
+  background: transparent;
+  color: transparent;
+}
+
+.fmt__spoiler.is-shown {
+  background: rgba(127, 127, 127, 0.18);
+  color: inherit;
+  cursor: text;
+  user-select: text;
+}
