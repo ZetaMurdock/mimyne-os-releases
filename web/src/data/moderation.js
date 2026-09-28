@@ -30,6 +30,9 @@ export const fetchTeam = () => ask('/staff');
 /** Owner: appoint someone at a level, or with null take them off the team. */
 export const setTeamMember = (uid, level) => ask('/staff', { method: 'POST', body: { uid, level } });
 
+/** Staff mail themselves, to see that Mimyne's email is set up: { sent, to }. */
+export const sendTestMail = () => ask('/staff/mail-test', { method: 'POST', body: {} });
+
 /** Your own standing: warnings, strikes and their dates, a mute, a suspension, a ban. Never who decided. */
 export const fetchMyStanding = () => ask('/moderation/me');
 

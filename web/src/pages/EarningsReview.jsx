@@ -155,7 +155,13 @@ function summary(run) {
   const skipped = {};
   for (const s of r.skipped ?? []) skipped[s.why] = (skipped[s.why] ?? 0) + 1;
   const why = Object.entries(skipped).map(([k, n]) => `${n} ${SKIPS[k] ?? k}`).join(', ');
-  return `${r.paid ?? 0} ${r.paid === 1 ? 'Hub' : 'Hubs'} paid, ${money(r.cents)}${why ? `; not paid: ${why}` : ''}`;
+  // What else came out of balances: months of Hub Pro, what expired unclaimed, who was warned of an expiry.
+  const more = [];
+  const hubs = (n) => `${n} ${n === 1 ? 'Hub' : 'Hubs'}`;
+  if (r.hubPro?.length) more.push(`Hub Pro from the balance of ${hubs(r.hubPro.length)}`);
+  if (r.expired?.length) more.push(`${money(r.expired.reduce((sum, e) => sum + (e.cents ?? 0), 0))} expired unclaimed in ${hubs(r.expired.length)}`);
+  if (r.warned?.length) more.push(`${r.warned.length} ${r.warned.length === 1 ? 'owner' : 'owners'} warned of an expiry`);
+  return `${hubs(r.paid ?? 0)} paid, ${money(r.cents)}${why ? `; not paid: ${why}` : ''}${more.length ? `; ${more.join('; ')}` : ''}`;
 }
 
 function Runs() {

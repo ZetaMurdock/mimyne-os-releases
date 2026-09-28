@@ -138,6 +138,9 @@ export const startPayouts = (replace = false) => ask('/earnings/payout-account',
 /** A link into the owner's own Stripe dashboard (bank details, the payouts Stripe made them): { url }. */
 export const openStripeDashboard = () => ask('/earnings/payout-account', { method: 'POST', body: { login: true } });
 
+/** The owner's choice to pay the Hub's Pro from its balance each month, once Mimyne offers it. */
+export const setHubProFromBalance = (hubId, on) => ask(`/earnings/hub/${encodeURIComponent(hubId)}/pro`, { method: 'POST', body: { fromBalance: on === true } });
+
 /** Which state the program is in - 'off', 'measure' or 'on' - for anyone; 'off' when it cannot be asked. */
 export async function fetchSupportState({ fetchFn = fetch } = {}) {
   try {

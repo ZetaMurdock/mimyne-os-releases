@@ -128,10 +128,32 @@
 }
 
 .earnings__entry.is-reversal .earnings__entry-cents,
-.earnings__entry.is-payout .earnings__entry-cents {
+.earnings__entry.is-payout .earnings__entry-cents,
+.earnings__entry.is-hub_pro .earnings__entry-cents,
+.earnings__entry.is-expiry .earnings__entry-cents {
   color: var(--text-2);
 }
 
 .earnings__problem {
   color: var(--live);
+}
+
+/* A balance about to expire: worth a look, not an error. */
+.earnings__warn {
+  margin: 0;
+  padding-left: var(--s-3);
+  border-left: 3px solid var(--live);
+  color: var(--text);
+}
+
+.earnings__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  cursor: pointer;
+}
+
+.earnings__choice input {
+  margin: 4px 0 0;
+  flex: none;
 }
