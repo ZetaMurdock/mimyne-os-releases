@@ -38,6 +38,7 @@ const router = createBrowserRouter([
             ? [
                 { path: 'h/:slug', lazy: page(() => import('./pages/Hub.jsx'), 'hubLoader') },
                 { path: 'h/:hubId/p/:postId', lazy: page(() => import('./pages/Thread.jsx'), 'threadLoader') },
+                { path: 'h/:hubId/b/:boardId/p/:postId', lazy: page(() => import('./pages/Thread.jsx'), 'threadLoader') },
                 { path: 'u/:name', lazy: page(() => import('./pages/Profile.jsx'), 'profileLoader') },
                 { path: 'people/:uid', lazy: page(() => import('./pages/Profile.jsx'), 'profileLoader') },
                 { path: 'people/:uid/p/:postId', lazy: page(() => import('./pages/Thread.jsx'), 'threadLoader') },

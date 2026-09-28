@@ -14,6 +14,7 @@ import HubEarnings from '../components/hub/HubEarnings.jsx';
 import HubFiles from '../components/hub/HubFiles.jsx';
 import HubRooms from '../components/hub/HubRooms.jsx';
 import HubLook from '../components/hub/HubLook.jsx';
+import HubBoard from '../components/hub/HubBoard.jsx';
 import PanelBackground from '../components/PanelBackground.jsx';
 import { canSeePage, hasBackdrop, isVideoLink } from '../lib/hubLook.js';
 import { cropStyle } from '../lib/profileShapes.js';
@@ -183,19 +184,18 @@ export default function Hub() {
             {tab === 'files' && <HubFiles hub={hub} user={user} access={access} onSignIn={signIn} />}
 
             {tab === 'board' && (
-              <div className="hub__board">
-                {!user ? (
-                  <LockedComposer text={`Sign in to post in ${hub.name}`} action="Sign in" onAction={signIn} />
-                ) : !access.canPost ? (
-                  <LockedComposer text="Only people who pledged can post here. The Hub's owner set it that way." />
-                ) : (
-                  <Composer placeholder={`Post to ${hub.name}`} onSubmit={post} />
-                )}
-                {posts.length === 0 && <p className="muted hub__empty">Nothing on the Board yet.</p>}
-                {posts.map((p) => (
-                  <PostCard key={p.id} post={p} hub={hub} showHub={false} roleOf={roleOf} canModerate={access.canModerate} />
-                ))}
-              </div>
+              <HubBoard
+                hub={hub}
+                user={user}
+                access={access}
+                level={level}
+                roleOf={roleOf}
+                posts={posts}
+                onPosts={setPosts}
+                board={params.get('board')}
+                onBoard={(id) => setTab('board', { board: id })}
+                onSignIn={signIn}
+              />
             )}
 
             {tab === 'pledged' && (
