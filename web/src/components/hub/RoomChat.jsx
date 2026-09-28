@@ -8,11 +8,15 @@ import ReportDialog from '../ReportDialog.jsx';
 import LinkPreview from '../LinkPreview.jsx';
 import MessageText from '../MessageText.jsx';
 import { AddReaction, Reactions } from '../Reactions.jsx';
+import TypingLine from '../TypingLine.jsx';
 import { toggledMarks } from '../../lib/reactions.js';
+import { makeTypingStamper } from '../../lib/typing.js';
 import { applyFormatKey } from '../../lib/composer.js';
 import { SharedPost, SharedProfile } from '../ShareCards.jsx';
 import { FileCard, PendingFile } from '../FileCard.jsx';
-import { deleteRoomMessage, editRoomMessage, sendRoomMessage, setMyRoomReactions, watchRoomMessages } from '../../data/rooms.js';
+import {
+  clearRoomTyping, deleteRoomMessage, editRoomMessage, sendRoomMessage, setMyRoomReactions, stampRoomTyping, watchRoomMessages, watchRoomTyping,
+} from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { uploadPicked } from '../../lib/files.js';
 import { insertAt, placeCaret } from '../../lib/insert.js';
@@ -45,6 +49,15 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
   const [messages, setMessages] = useState(null);
   const [count, setCount] = useState(PAGE);
   const [text, setText] = useState('');
+  // Who is typing (their stamps), and my own stamps as I type (lib/typing.js).
+  const [typing, setTyping] = useState({});
+  const stamper = useRef(null);
+  useEffect(() => watchRoomTyping(hub.id, room.id, setTyping), [hub.id, room.id]);
+  useEffect(() => {
+    if (!user) return undefined;
+    stamper.current = makeTypingStamper({ stamp: () => stampRoomTyping(hub.id, room.id, user.uid), clear: () => clearRoomTyping(hub.id, room.id, user.uid) });
+    return () => stamper.current?.stop();
+  }, [hub.id, room.id, user?.uid]);
   const [files, setFiles] = useState([]);
   const [progress, setProgress] = useState({});
   const [sending, setSending] = useState(false);
@@ -117,6 +130,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
       for (const picked of files) labels.push(await uploadPicked(picked, (p) => setProgress((prev) => ({ ...prev, [picked.id]: p }))));
       await sendRoomMessage(hub.id, room.id, user.uid, { text, files: labels, replyTo: replyLabel(replyTo) });
       setText('');
+      stamper.current?.stop();
       setFiles([]);
       setReplyTo(null);
       stick.current = true;
@@ -179,6 +193,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
 
   function onType(e) {
     setText(e.target.value);
+    stamper.current?.typed(e.target.value);
     const upto = e.target.value.slice(0, e.target.selectionStart);
     const match = upto.match(/(^|\s)@([A-Za-z0-9_.]{0,24})$/);
     setMention(match ? { query: match[2], start: upto.length - match[2].length - 1, pick: 0 } : null);
@@ -329,6 +344,8 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
           </span>
         </div>
       ) : (
+        <>
+        <TypingLine stamps={typing} meUid={user?.uid} />
         <form className="room__composer" onSubmit={submit}>
           {mention && suggestions.length > 0 && (
             <ul className="room__mentions" role="listbox" aria-label="People to mention">
@@ -400,6 +417,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
             <Button type="submit" variant="ghost" icon="send" iconOnly aria-label="Send" loading={sending} disabled={!text.trim() && !files.length} />
           </div>
         </form>
+        </>
       )}
 
       {dragging && (

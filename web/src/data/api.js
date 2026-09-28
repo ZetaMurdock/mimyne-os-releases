@@ -519,6 +519,10 @@ function cleanConversation(id, data, uid) {
     lastText: text(data.lastText, 200),
     lastFrom: text(data.lastFrom, 128),
     at: millis(data.lastAt ?? data.createdAt),
+    // Where each member has read up to, in milliseconds (markRead).
+    lastRead: Object.fromEntries(Object.entries(data.lastRead && typeof data.lastRead === 'object' ? data.lastRead : {})
+      .map(([member, at]) => [member, millis(at)])
+      .filter(([, at]) => Number.isFinite(at))),
     other: data.kind === 'direct' ? (data.members ?? []).find((m) => m !== uid) : null,
   };
 }
@@ -531,6 +535,32 @@ export function watchConversations(uid, onChange, onError) {
     { includeMetadataChanges: true },
     (snap) => onChange(snap.docs.map((d) => ({ ...cleanConversation(d.id, d.data(), uid), pending: d.metadata.hasPendingWrites })).sort((a, b) => b.at - a.at)),
     onError,
+  );
+}
+
+/** Where I have read up to in a conversation: now. Only my own entry is written. */
+export function markRead(convoId, uid) {
+  return updateDoc(doc(db, 'conversations', convoId), { [`lastRead.${uid}`]: serverTimestamp() });
+}
+
+// "Someone is typing" (lib/typing.js): my stamp, sent while I type and
+// taken away when I send or stop; everyone's stamps, for whoever has the
+// conversation open. A stamp is { at }; anything older than a few seconds
+// is nobody typing.
+export function stampTyping(convoId, uid) {
+  return setDoc(doc(db, 'conversations', convoId, 'typing', uid), { at: serverTimestamp() }).catch(() => {});
+}
+
+export function clearTyping(convoId, uid) {
+  return deleteDoc(doc(db, 'conversations', convoId, 'typing', uid)).catch(() => {});
+}
+
+/** { uid: at-in-ms } for every stamp there is; the caller keeps the fresh ones. */
+export function watchTyping(convoId, onChange) {
+  return onSnapshot(
+    collection(db, 'conversations', convoId, 'typing'),
+    (snap) => onChange(Object.fromEntries(snap.docs.map((d) => [d.id, millis(d.data({ serverTimestamps: 'estimate' }).at)]))),
+    () => onChange({}),
   );
 }
 

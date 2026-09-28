@@ -318,6 +318,13 @@
   overflow-y: auto;
 }
 
+/* The other person has read up to my last message. */
+.msg__seen {
+  align-self: flex-end;
+  margin: -2px 4px 0 0;
+  font-size: 11px;
+}
+
 .inbox__side {
   display: flex;
   flex-direction: column;

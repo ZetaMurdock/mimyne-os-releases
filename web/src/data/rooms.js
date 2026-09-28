@@ -189,6 +189,26 @@ export function setMyRoomReactions(hubId, roomId, messageId, uid, marks) {
   return updateDoc(doc(messagesOf(hubId, roomId), messageId), { [`reactions.${uid}`]: marks.length ? marks : deleteField() });
 }
 
+// "Someone is typing" in a Room (lib/typing.js): the same stamps a conversation has.
+const typingOf = (hubId, roomId, uid) => doc(db, 'hubs', hubId, 'rooms', roomId, 'typing', uid);
+
+export function stampRoomTyping(hubId, roomId, uid) {
+  return setDoc(typingOf(hubId, roomId, uid), { at: serverTimestamp() }).catch(() => {});
+}
+
+export function clearRoomTyping(hubId, roomId, uid) {
+  return deleteDoc(typingOf(hubId, roomId, uid)).catch(() => {});
+}
+
+/** { uid: at-in-ms } for every stamp there is; the caller keeps the fresh ones. */
+export function watchRoomTyping(hubId, roomId, onChange) {
+  return onSnapshot(
+    collection(db, 'hubs', hubId, 'rooms', roomId, 'typing'),
+    (snap) => onChange(Object.fromEntries(snap.docs.map((d) => [d.id, millis(d.data({ serverTimestamps: 'estimate' }).at)]))),
+    () => onChange({}),
+  );
+}
+
 // ---------------------------------------------------------- who's here now
 
 const HERE_FRESH = 150_000;
