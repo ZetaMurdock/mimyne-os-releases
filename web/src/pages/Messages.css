@@ -113,9 +113,27 @@
 }
 
 .inbox__thread {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+/* Files dragged over the conversation: drop anywhere, they go with the next message. */
+.inbox__drop {
+  position: absolute;
+  inset: 10px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px dashed var(--text-3);
+  border-radius: 10px;
+  background: rgb(5 5 5 / 0.88);
+  color: var(--text-2);
+  pointer-events: none;
 }
 
 .inbox__head {
