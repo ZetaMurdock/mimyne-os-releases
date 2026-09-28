@@ -54,11 +54,13 @@ function put(url, body, bearer, onProgress) {
 
 /**
  * Uploads a File and returns the label posts and messages carry:
- * { name, size, type, path }. `onProgress` gets 0..1.
+ * { name, size, type, path }. `onProgress` gets 0..1. A picture or video
+ * uploaded `public` (a profile banner or background) is for anyone with the
+ * link, for good: the label also carries that `url`.
  */
-export async function uploadFile(file, onProgress = () => {}) {
+export async function uploadFile(file, onProgress = () => {}, { public: open = false } = {}) {
   const type = file.type || 'application/octet-stream';
-  const start = await callJson('/uploads', { name: file.name, size: file.size, type });
+  const start = await callJson('/uploads', { name: file.name, size: file.size, type, ...(open ? { public: true } : {}) });
   const ticket = encodeURIComponent(start.ticket);
 
   let sha256 = null;
@@ -78,7 +80,11 @@ export async function uploadFile(file, onProgress = () => {}) {
     await callJson(`/uploads/complete?ticket=${ticket}`, { etags });
   }
   onProgress(1);
-  return { name: file.name, size: file.size, type, path: start.path, ...(sha256 ? { sha256 } : {}) };
+  return {
+    name: file.name, size: file.size, type, path: start.path,
+    ...(sha256 ? { sha256 } : {}),
+    ...(open && typeof start.url === 'string' ? { url: start.url } : {}),
+  };
 }
 
 /** A picked file's label, saying so when a picture, video or song goes as a plain file. */
