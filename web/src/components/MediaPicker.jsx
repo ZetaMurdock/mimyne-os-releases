@@ -52,7 +52,7 @@ function remember(char) {
  * ({ kind: 'gif', url, title, width, height } or { kind: 'library', item }).
  * `emojiOnly` for places that take words alone.
  */
-export default function MediaPicker({ onEmoji, onPick, emojiOnly = false, placement = 'up', align = 'start' }) {
+export default function MediaPicker({ onEmoji, onPick, emojiOnly = false, placement = 'up', align = 'start', label = 'Emoji, GIFs and stickers' }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState('emoji');
   const root = useRef(null);
@@ -76,11 +76,11 @@ export default function MediaPicker({ onEmoji, onPick, emojiOnly = false, placem
 
   return (
     <span className="picker" ref={root}>
-      <button type="button" className={`picker__trigger ${open ? 'is-open' : ''}`} aria-label="Emoji, GIFs and stickers" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`picker__trigger ${open ? 'is-open' : ''}`} aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Icon name="smile" size={18} />
       </button>
       {open && (
-        <div className={`picker__panel picker__panel--${placement} picker__panel--${align}`} role="dialog" aria-label="Emoji, GIFs and stickers">
+        <div className={`picker__panel picker__panel--${placement} picker__panel--${align}`} role="dialog" aria-label={label}>
           {!emojiOnly && (
             <div className="picker__tabs" role="tablist">
               {[

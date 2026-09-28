@@ -7,10 +7,12 @@ import ShareDialog from '../ShareDialog.jsx';
 import ReportDialog from '../ReportDialog.jsx';
 import LinkPreview from '../LinkPreview.jsx';
 import MessageText from '../MessageText.jsx';
+import { AddReaction, Reactions } from '../Reactions.jsx';
+import { toggledMarks } from '../../lib/reactions.js';
 import { applyFormatKey } from '../../lib/composer.js';
 import { SharedPost, SharedProfile } from '../ShareCards.jsx';
 import { FileCard, PendingFile } from '../FileCard.jsx';
-import { deleteRoomMessage, editRoomMessage, sendRoomMessage, watchRoomMessages } from '../../data/rooms.js';
+import { deleteRoomMessage, editRoomMessage, sendRoomMessage, setMyRoomReactions, watchRoomMessages } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { uploadPicked } from '../../lib/files.js';
 import { insertAt, placeCaret } from '../../lib/insert.js';
@@ -87,6 +89,16 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
   const canTalk = !!user && access.canPost && (room.kind === 'chat' || access.canModerate);
   const byId = useMemo(() => new Map((messages ?? []).map((m) => [m.id, m])), [messages]);
   const mentionsMe = (m) => !!myName && new RegExp(`(^|\\W)@${myName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(m.text);
+
+  /** My mark on a message put on, or taken off (lib/reactions.js). */
+  async function react(m, mark) {
+    if (!user) return;
+    try {
+      await setMyRoomReactions(hub.id, room.id, m.id, user.uid, toggledMarks(m.reactions?.[user.uid], mark));
+    } catch {
+      setError("That reaction didn't land.");
+    }
+  }
 
   function addFiles(list) {
     const picked = [...list].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`, file }));
@@ -288,6 +300,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
               }}
               onDelete={(skipAsk) => remove(m, skipAsk)}
               onForward={() => setForwarding(m)}
+              onReact={(mark) => react(m, mark)}
               onReport={() => setReporting(m)}
             />
           </Fragment>
@@ -455,7 +468,7 @@ function RoomText({ text, edited }) {
 
 function RoomMessage({
   message, head, meUid, role, fallbackName, answered, highlight, editing, canModerate, canTalk,
-  onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport,
+  onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport, onReact,
 }) {
   const author = usePerson(message.from, fallbackName);
   const mine = message.from === meUid;
@@ -531,10 +544,12 @@ function RoomMessage({
           )}
           {message.post && <SharedPost post={message.post} />}
           {message.profileUid && <SharedProfile uid={message.profileUid} />}
+          <Reactions reactions={message.reactions} meUid={meUid} onToggle={canTalk ? onReact : null} />
         </div>
       </div>
       {!editing && meUid && (
         <div className="room-msg__tools" role="group" aria-label="Message actions">
+          {canTalk && <AddReaction onPick={onReact} />}
           {canTalk && (
             <button type="button" aria-label="Reply" title="Reply" onClick={onReply}>
               <Icon name="reply" size={16} />

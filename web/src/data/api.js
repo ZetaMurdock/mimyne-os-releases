@@ -2,8 +2,9 @@
 // app. The rules in the app's repo (firestore.rules, "hubs" and "messages")
 // decide who may do what; this file only asks.
 import { plainText } from '../lib/messageFormat.js';
+import { cleanReactions } from '../lib/reactions.js';
 import {
-  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs,
+  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
   writeBatch,
 } from 'firebase/firestore';
@@ -548,6 +549,8 @@ export function cleanMessage(id, m) {
       ? { id: text(m.replyTo.id, 128), from: text(m.replyTo.from, 128), text: text(m.replyTo.text, 200) }
       : null,
     edited: !!m.editedAt,
+    // Each person's marks under their own uid (lib/reactions.js).
+    reactions: cleanReactions(m.reactions),
     at: millis(m.createdAt),
   };
 }
@@ -587,6 +590,16 @@ export function editMessage(convoId, messageId, words) {
 
 export function deleteMessage(convoId, messageId) {
   return deleteDoc(doc(db, 'conversations', convoId, 'messages', messageId));
+}
+
+/**
+ * My marks on a message, as a whole: the list, or none. Only my own entry
+ * of the message's reactions is written (firestore.rules, reactionChange).
+ */
+export function setMyReactions(convoId, messageId, uid, marks) {
+  return updateDoc(doc(db, 'conversations', convoId, 'messages', messageId), {
+    [`reactions.${uid}`]: marks.length ? marks : deleteField(),
+  });
 }
 
 /** A shared post, for its card in a message: null when it's gone or hidden. */

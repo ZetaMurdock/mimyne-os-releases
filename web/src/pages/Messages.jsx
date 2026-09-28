@@ -12,11 +12,13 @@ import { insertAt, placeCaret } from '../lib/insert.js';
 import { SharedPost, SharedProfile } from '../components/ShareCards.jsx';
 import LinkPreview from '../components/LinkPreview.jsx';
 import MessageText from '../components/MessageText.jsx';
+import { AddReaction, Reactions } from '../components/Reactions.jsx';
+import { toggledMarks } from '../lib/reactions.js';
 import { applyFormatKey } from '../lib/composer.js';
 import { plainText } from '../lib/messageFormat.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
-  deleteMessage, editMessage, getHubCard, openDirect, sendMessage, watchConversations, watchMessages,
+  deleteMessage, editMessage, getHubCard, openDirect, sendMessage, setMyReactions, watchConversations, watchMessages,
 } from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
 import { usePerson } from '../data/people.js';
@@ -225,6 +227,15 @@ function Conversation({ convo, me }) {
     }
   }
 
+  /** My mark on a message put on, or taken off (lib/reactions.js). */
+  async function react(message, mark) {
+    try {
+      await setMyReactions(convo.id, message.id, me.uid, toggledMarks(message.reactions?.[me.uid], mark));
+    } catch {
+      setError("That reaction didn't land.");
+    }
+  }
+
   const sharedFiles = messages.flatMap((m) => m.files);
   const byId = new Map(messages.map((m) => [m.id, m]));
 
@@ -263,6 +274,7 @@ function Conversation({ convo, me }) {
               onCancelEdit={() => setEditing(null)}
               onDelete={() => remove(m)}
               onForward={() => setForwarding(m)}
+              onReact={(mark) => react(m, mark)}
               onReport={() => setReporting(m)}
             />
           ))}
@@ -393,7 +405,7 @@ function ReplyBar({ message, mine, onCancel }) {
   );
 }
 
-function Message({ message, meUid, mine, group, answered, editing, onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport }) {
+function Message({ message, meUid, mine, group, answered, editing, onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport, onReact }) {
   const author = usePerson(group && !mine ? message.from : null);
   const quoted = usePerson(message.replyTo && message.replyTo.from !== meUid ? message.replyTo.from : null);
   const [draft, setDraft] = useState(message.text);
@@ -456,8 +468,10 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
       ))}
       {message.post && <SharedPost post={message.post} />}
       {message.profileUid && <SharedProfile uid={message.profileUid} />}
+      <Reactions reactions={message.reactions} meUid={meUid} onToggle={onReact} />
       {!editing && (
         <div className="msg__tools" role="group" aria-label="Message actions">
+          <AddReaction onPick={onReact} />
           <button type="button" aria-label="Reply" title="Reply" onClick={onReply}>
             <Icon name="reply" size={14} />
           </button>
