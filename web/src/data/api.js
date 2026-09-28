@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { auth, authReady, db } from '../lib/firebase.js';
 import { countOf, forgetCount } from '../lib/counts.js';
+import { FILES_URL } from '../lib/files.js';
 
 // ------------------------------------------------------------------ shapes
 
@@ -431,11 +432,13 @@ export async function getFeed() {
   const user = await authReady;
   if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
   const uid = user.uid;
-  const [pledged, buddies, stalking, publicHubs] = await Promise.all([
+  let discoveryUnavailable = false;
+  const [pledged, buddies, stalking, publicHubs, discovered] = await Promise.all([
     myHubIds(uid),
     getBuddies(uid).catch(() => []),
     listStalking(uid).catch(() => []),
     discoverHubs(12).catch(() => []),
+    discoverPublicPosts(user).catch(() => { discoveryUnavailable = true; return []; }),
   ]);
   shareBuddyList(uid, buddies);
   const fof = await buddiesOfBuddies(uid, buddies).catch(() => []);
@@ -454,9 +457,16 @@ export async function getFeed() {
     Promise.all(popular.map((h) => listPosts({ hubId: h.id }, 6).then((l) => l.map((p) => ({ ...p, circle: 'popular' }))))),
     getHubCards(pledged),
   ]);
-  const posts = [...personLists.flat(), ...mineHubs, ...popularLists.flat()]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 90);
+  // Keep relationship tags on duplicates, and reserve space for discovery
+  // rather than letting a busy friend list crowd out unrelated people.
+  const connected = [...personLists.flat(), ...mineHubs, ...popularLists.flat()]
+    .sort((a, b) => b.at - a.at).slice(0, 90);
+  const unique = new Map();
+  for (const p of [...connected, ...discovered]) {
+    const key = postRef(p.scope, p.id).path;
+    if (!unique.has(key)) unique.set(key, p);
+  }
+  const posts = [...unique.values()];
 
   // What there is to rank by: how many saw it, approved it, talked about it.
   const withStats = await Promise.all(posts.map(async (p) => {
@@ -466,10 +476,29 @@ export async function getFeed() {
 
   return {
     posts: withStats,
+    discoveryUnavailable,
     discover: publicHubs.filter((h) => !pledged.includes(h.id)).slice(0, 5),
     buddies,
-    hubs: [...hubs, ...popular],
+    hubs: await getHubCards([...new Set([...hubs, ...popular].map((h) => h.id).concat(discovered.map((p) => p.scope.hubId).filter(Boolean)))]),
   };
+}
+
+async function discoverPublicPosts(user) {
+  const response = await fetch(`${FILES_URL}/feed/discover`, {
+    headers: { authorization: `Bearer ${await user.getIdToken()}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error('Public discovery unavailable');
+  const { paths } = await response.json();
+  if (!Array.isArray(paths)) throw new Error('Invalid discovery response');
+  const posts = await Promise.all(paths.slice(0, 60).map(async (path) => {
+    if (typeof path !== 'string' || !/^(profile_pages|hubs)\/[^/]+\/posts\/[^/]+$/.test(path)) return null;
+    const [kind, owner, , id] = path.split('/');
+    const scope = kind === 'hubs' ? { hubId: owner } : { profileUid: owner };
+    const snap = await readOrMissing(postRef(scope, id));
+    return snap ? { ...cleanPost(scope, id, snap.data()), circle: 'popular' } : null;
+  }));
+  return posts.filter(Boolean);
 }
 
 // ------------------------------------------------------ profiles, stalking

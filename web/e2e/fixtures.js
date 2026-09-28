@@ -31,6 +31,7 @@ async function fakeWorker(context, storage, security) {
     const url = new URL(req.url());
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (url.pathname === '/feed/discover') return route.fulfill({ headers: cors, json: { paths: storage.discovery ?? [] } });
     const token = (req.headers().authorization ?? '').split(' ')[1];
     const uid = token ? JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).user_id : null;
     const reply = (json, status = 200) => route.fulfill({ status, headers: cors, json });
