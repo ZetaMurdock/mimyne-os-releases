@@ -190,7 +190,7 @@ export default function Hub() {
                 <span className="muted">{LEVEL_LABEL[role.level]}</span>
               </div>
             ))}
-            <p className="hub__role-note">Names and colours are this Hub's own.</p>
+            <p className="hub__role-note">Names and colors are this Hub's own.</p>
           </section>
         </aside>
         )}
