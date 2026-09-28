@@ -330,6 +330,11 @@ function Conversation({ convo, me }) {
                   e.preventDefault();
                   e.currentTarget.form?.requestSubmit();
                 }
+                // As in Discord, and in Room chat: up on an empty box edits your last message.
+                if (e.key === 'ArrowUp' && !text) {
+                  const last = [...messages].reverse().find((m) => m.from === me.uid && m.text);
+                  if (last) { e.preventDefault(); setEditing(last.id); }
+                }
               }}
               // Pictures and GIFs pasted straight in go along as files.
               onPaste={(e) => {
