@@ -136,11 +136,12 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
       )}
 
       <div className="profile__banner">
+        {/* Framed the way its owner framed it; unframed, it covers the strip as before. */}
         {page?.banner && !hidden ? (
           bannerVideo(page.banner) ? (
-            <video src={page.banner} autoPlay loop muted playsInline />
+            <video src={page.banner} autoPlay loop muted playsInline style={cropStyle(page.bannerCrop)} />
           ) : (
-            <img src={page.banner} alt="" referrerPolicy="no-referrer" />
+            <img src={page.banner} alt="" referrerPolicy="no-referrer" style={cropStyle(page.bannerCrop)} />
           )
         ) : null}
         <div className="profile__banner-shade" />

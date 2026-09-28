@@ -296,6 +296,7 @@ export function cleanProfilePage(data) {
     discord: cleanDiscordShow(data.discord),
     // Only when there is one, matching how it is written: a page that is not
     // framed says nothing about framing, at either end.
+    ...(isCropped(data.bannerCrop) ? { bannerCrop: normalizeCrop(data.bannerCrop) } : {}),
     ...(isCropped(data.backgroundCrop) ? { backgroundCrop: normalizeCrop(data.backgroundCrop) } : {}),
     updatedAt: stamp(data.updatedAt),
   };
