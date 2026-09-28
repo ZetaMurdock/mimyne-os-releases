@@ -184,6 +184,11 @@ export function deleteRoomMessage(hubId, roomId, messageId) {
   return deleteDoc(doc(messagesOf(hubId, roomId), messageId));
 }
 
+/** My marks on a Room message, as a whole: the list, or none (lib/reactions.js). */
+export function setMyRoomReactions(hubId, roomId, messageId, uid, marks) {
+  return updateDoc(doc(messagesOf(hubId, roomId), messageId), { [`reactions.${uid}`]: marks.length ? marks : deleteField() });
+}
+
 // ---------------------------------------------------------- who's here now
 
 const HERE_FRESH = 150_000;

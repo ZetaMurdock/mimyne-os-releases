@@ -1,0 +1,66 @@
+/* Reactions under a message (components/Reactions.jsx). */
+.react {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.react__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.react__chip:hover:not(:disabled) {
+  border-color: var(--border-2, var(--border));
+  color: var(--text);
+}
+
+.react__chip:disabled {
+  cursor: default;
+}
+
+.react__chip.is-mine {
+  border-color: var(--accent, #7c3aed);
+  background: rgba(124, 58, 237, 0.14);
+  color: var(--text);
+}
+
+.react__mark {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.react__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tool: the quick marks in a row, then the picker for any other. */
+.react__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.react__quick {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.react__quick:hover {
+  background: var(--surface-2);
+}
