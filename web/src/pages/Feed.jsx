@@ -37,7 +37,7 @@ export default function Feed() {
 }
 
 function SignedInFeed() {
-  const { posts: loaded, discover, buddies, hubs: loadedHubs } = useLoaderData();
+  const { posts: loaded, discover, buddies, hubs: loadedHubs, discoveryUnavailable } = useLoaderData();
   const { user, pledged } = useSession();
   const [params, setParams] = useSearchParams();
   const [posts, setPosts] = useState(loaded);
@@ -66,7 +66,6 @@ function SignedInFeed() {
     .filter((p) => {
       if (filter === 'buddies') return p.circle === 'buddies' || p.circle === 'fof';
       if (filter === 'hubs') return !!p.scope.hubId && (p.circle === 'hubs' || pledged.has(p.scope.hubId));
-      if (filter === 'popular') return Date.now() - p.at < 14 * 86_400_000;
       return true;
     })
     .sort((a, b) => {
@@ -107,12 +106,13 @@ function SignedInFeed() {
         </div>
 
         <Composer destinations={destinations} onSubmit={post} />
+        {discoveryUnavailable && <p role="status" className="muted">Public posts couldn’t load. Refresh to try again.</p>}
 
         {shown.length === 0 && (
           <div className="feed__empty">
             <p>Nothing here yet.</p>
             <p className="muted">
-              {filter === 'hubs' ? 'Nothing posted in your Hubs yet.' : 'Pledge to a Hub or add Buddies, and their posts show up here.'}
+              {filter === 'hubs' ? 'Nothing posted in your Hubs yet.' : filter === 'buddies' ? 'Add Buddies to see their posts here.' : 'Public posts appear here even before you add Buddies. Be the first to share something.'}
             </p>
           </div>
         )}
