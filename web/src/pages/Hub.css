@@ -1,6 +1,50 @@
 .hub__banner {
+  position: relative;
   height: 200px;
+  overflow: hidden;
   border-bottom: 1px solid var(--border);
+}
+
+.hub__banner img,
+.hub__banner video {
+  display: block;
+}
+
+/* A background behind the whole page (a picture, a video, or the panels
+   set up in the app), dimmed as the owner asked; the page's own surfaces
+   sit over it. */
+.hub--backdrop {
+  position: relative;
+}
+
+.hub__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: #000;
+}
+
+.hub__backdrop img,
+.hub__backdrop video {
+  display: block;
+}
+
+.hub__backdrop-dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+}
+
+.hub--backdrop .hub__banner {
+  border-bottom-color: transparent;
+}
+
+.hub--backdrop .card,
+.hub--backdrop .hub__notice {
+  background: rgb(10 10 11 / 0.82);
+  backdrop-filter: blur(8px);
 }
 
 /* Signed in, the banner runs up under the floating notch. */

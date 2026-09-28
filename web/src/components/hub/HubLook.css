@@ -1,0 +1,152 @@
+.hublook {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hublook__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.hublook__section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.hublook__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hublook__pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hublook__link {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.hublook__link .field__input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+}
+
+.hublook__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hublook__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hublook__mode.is-on {
+  border-color: var(--text-3);
+  background: var(--surface-2);
+}
+
+.hublook__mode input {
+  margin: 0;
+}
+
+.hublook__dim {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.hublook__dim input {
+  accent-color: var(--accent);
+}
+
+.hublook__panels {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  background: #000;
+}
+
+.hublook__panels-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+
+.hublook__pages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.hublook__page {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.hublook__page select {
+  max-width: 60%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.hublook__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.hublook__spacer {
+  flex-grow: 1;
+}
+
+.hublook__peek {
+  position: relative;
+  width: 64px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #000;
+}
+
+@media (max-width: 560px) {
+  .hublook__pages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

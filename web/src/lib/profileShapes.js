@@ -63,6 +63,33 @@ export function cropStyle(crop) {
   };
 }
 
+/**
+ * Where a drag of (dx, dy) screen pixels leaves the crop, inside a preview
+ * of this size. At zoom 1 there is no spare picture, so a drag moves
+ * nothing; past that, the whole travel is half the overflow each way, so
+ * dragging by a pixel moves the picture by a pixel.
+ */
+export function dragCrop(crop, { dx = 0, dy = 0 }, frame) {
+  const current = normalizeCrop(crop);
+  const width = Number(frame?.width) || 0;
+  const height = Number(frame?.height) || 0;
+  const spare = current.zoom - 1;
+  if (spare <= 0 || width <= 0 || height <= 0) return current;
+  return {
+    zoom: current.zoom,
+    x: clamp(current.x + (dx / (width * spare / 2)), -1, 1),
+    y: clamp(current.y + (dy / (height * spare / 2)), -1, 1),
+  };
+}
+
+/** Zooming, keeping what is in the middle in the middle; back at 1 the travel goes too. */
+export function zoomCrop(crop, zoom) {
+  const current = normalizeCrop(crop);
+  const next = clamp(number(Number(zoom), current.zoom), 1, MAX_ZOOM);
+  if (next === 1) return NO_CROP;
+  return { zoom: next, x: current.x, y: current.y };
+}
+
 // ---------------------------------------------------------- discordLook.js
 
 const USERNAME = /^[A-Za-z0-9_.]{2,32}$/;

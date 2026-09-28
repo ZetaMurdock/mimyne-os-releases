@@ -40,13 +40,15 @@ function textOn(hex) {
 
 export function HubIcon({ hub, size = 32 }) {
   const bg = hub.color ?? '#3F3F46';
+  // Its own picture when the owner gave it one (lib/hubLook.js), else its letter.
+  const icon = typeof hub.icon === 'string' && /^(https:|data:image)/.test(hub.icon) ? hub.icon : null;
   return (
     <span
-      className="hub-icon"
+      className={`hub-icon ${icon ? 'hub-icon--picture' : ''}`}
       style={{ width: size, height: size, borderRadius: Math.round(size * 0.28), background: bg, color: textOn(bg), fontSize: Math.round(size * 0.42) }}
       aria-hidden="true"
     >
-      {(hub.name ?? '?').slice(0, 1).toUpperCase()}
+      {icon ? <img src={icon} alt="" referrerPolicy="no-referrer" draggable={false} /> : (hub.name ?? '?').slice(0, 1).toUpperCase()}
     </span>
   );
 }

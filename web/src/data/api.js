@@ -4,6 +4,7 @@
 import { plainText } from '../lib/messageFormat.js';
 import { cleanReactions } from '../lib/reactions.js';
 import { cleanFolders } from '../lib/hubFolders.js';
+import { cleanHubLook, cleanPages } from '../lib/hubLook.js';
 import {
   addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
@@ -32,7 +33,32 @@ function cleanHub(id, data) {
     postingPolicy: data.postingPolicy === 'pledged' ? 'pledged' : 'signed-in',
     rules: text(data.rules, 3000),
     ownerId: text(data.ownerId, 128),
+    // Its look and its kept pages (lib/hubLook.js), on the same record.
+    ...cleanHubLook(data),
   };
+}
+
+/**
+ * The owner's changes to a Hub's look and its pages (lib/hubLook.js):
+ * only those fields, with the time the rules ask for.
+ */
+export function updateHubLook(hubId, look) {
+  const patch = {
+    icon: look.icon ?? null,
+    banner: look.banner ?? null,
+    bannerCrop: look.banner ? look.bannerCrop ?? null : null,
+    background: look.background ?? null,
+    backgroundCrop: look.background ? look.backgroundCrop ?? null : null,
+    backgroundDim: Number(look.backgroundDim) || 0,
+    bgMode: ['none', 'image', 'panels'].includes(look.bgMode) ? look.bgMode : 'none',
+    bgPanels: Array.isArray(look.bgPanels) ? look.bgPanels.slice(0, 16) : [],
+    bgDividers: Array.isArray(look.bgDividers) ? look.bgDividers.slice(0, 15) : [],
+    bgPanelGap: Number.isFinite(look.bgPanelGap) ? look.bgPanelGap : 1.2,
+    bgPanelLineColor: /^#[0-9A-Fa-f]{6}$/.test(look.bgPanelLineColor || '') ? look.bgPanelLineColor : '#000000',
+    pages: cleanPages(look.pages),
+    updatedAt: serverTimestamp(),
+  };
+  return updateDoc(doc(db, 'hubs', hubId), patch);
 }
 
 export function cleanFiles(files) {
