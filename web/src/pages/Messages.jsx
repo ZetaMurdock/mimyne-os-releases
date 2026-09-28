@@ -13,12 +13,15 @@ import { SharedPost, SharedProfile } from '../components/ShareCards.jsx';
 import LinkPreview from '../components/LinkPreview.jsx';
 import MessageText from '../components/MessageText.jsx';
 import { AddReaction, Reactions } from '../components/Reactions.jsx';
+import TypingLine from '../components/TypingLine.jsx';
 import { toggledMarks } from '../lib/reactions.js';
+import { makeTypingStamper } from '../lib/typing.js';
 import { applyFormatKey } from '../lib/composer.js';
 import { plainText } from '../lib/messageFormat.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
-  deleteMessage, editMessage, getHubCard, openDirect, sendMessage, setMyReactions, watchConversations, watchMessages,
+  clearTyping, deleteMessage, editMessage, getHubCard, markRead, openDirect, sendMessage, setMyReactions, stampTyping, watchConversations,
+  watchMessages, watchTyping,
 } from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
 import { usePerson } from '../data/people.js';
@@ -66,7 +69,12 @@ function Inbox({ me }) {
 
   useEffect(() => watchConversations(me.uid, setConversations, () => setError("Messages couldn't load.")), [me.uid]);
   useEffect(() => {
-    if (active) markSeen(active.id);
+    if (!active) return;
+    markSeen(active.id);
+    // Where I have read up to, for every device and for the other side's "Seen".
+    if (active.lastFrom && active.lastFrom !== me.uid && active.at > (active.lastRead?.[me.uid] ?? 0)) {
+      markRead(active.id, me.uid).catch(() => {});
+    }
   }, [active?.id, active?.at]);
 
   return (
@@ -79,7 +87,15 @@ function Inbox({ me }) {
         {error && <p className="form-error">{error}</p>}
         {conversations?.length === 0 && <p className="muted inbox__none">No conversations yet. Start one with the pen above.</p>}
         {conversations?.map((c) => (
-          <Row key={c.id} convo={c} me={me} active={c === active} unread={c.lastFrom && c.lastFrom !== me.uid && c.at > (seenMap()[c.id] ?? 0) && c !== active} />
+          <Row
+            key={c.id}
+            convo={c}
+            me={me}
+            active={c === active}
+            // Unread: someone else's message since I last read (kept on the
+            // conversation now, with this device's older memory as a fallback).
+            unread={!!c.lastFrom && c.lastFrom !== me.uid && c.at > Math.max(c.lastRead?.[me.uid] ?? 0, seenMap()[c.id] ?? 0) && c !== active}
+          />
         ))}
       </nav>
 
@@ -148,8 +164,16 @@ function Conversation({ convo, me }) {
   const fileInput = useRef(null);
   const input = useRef(null);
   const end = useRef(null);
+  // Who is typing (their stamps), and my own stamps as I type (lib/typing.js).
+  const [typing, setTyping] = useState({});
+  const stamper = useRef(null);
 
   useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load.")), [convo.id]);
+  useEffect(() => watchTyping(convo.id, setTyping), [convo.id]);
+  useEffect(() => {
+    stamper.current = makeTypingStamper({ stamp: () => stampTyping(convo.id, me.uid), clear: () => clearTyping(convo.id, me.uid) });
+    return () => stamper.current?.stop();
+  }, [convo.id, me.uid]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
@@ -173,6 +197,7 @@ function Conversation({ convo, me }) {
         replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null,
       });
       setText('');
+      stamper.current?.stop();
       if (input.current) input.current.style.height = 'auto';
       setFiles([]);
       setReplyTo(null);
@@ -278,9 +303,15 @@ function Conversation({ convo, me }) {
               onReport={() => setReporting(m)}
             />
           ))}
+          {/* In a direct chat, whether the other person has read up to my last message. */}
+          {convo.kind === 'direct' && convo.other && messages.length > 0 && messages[messages.length - 1].from === me.uid
+            && (convo.lastRead?.[convo.other] ?? 0) >= messages[messages.length - 1].at && (
+            <p className="msg__seen muted">Seen</p>
+          )}
           <div ref={end} />
         </div>
 
+        <TypingLine stamps={typing} meUid={me.uid} />
         <form className="inbox__composer" onSubmit={submit}>
           {replyTo && <ReplyBar message={replyTo} mine={replyTo.from === me.uid} onCancel={() => setReplyTo(null)} />}
           {files.length > 0 && (
@@ -321,7 +352,7 @@ function Conversation({ convo, me }) {
               placeholder={`Message ${title}. Any file, any size.`}
               maxLength={4000}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => { setText(e.target.value); stamper.current?.typed(e.target.value); }}
               onInput={(e) => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 200)}px`; }}
               onKeyDown={(e) => {
                 if (applyFormatKey(e, e.currentTarget, setText)) { e.preventDefault(); return; }
