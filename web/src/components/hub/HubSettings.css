@@ -1,0 +1,140 @@
+.hubset {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hubset__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hubset__tab {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hubset__tab:hover {
+  color: var(--text);
+}
+
+.hubset__tab.is-on {
+  border-bottom-color: var(--text);
+  color: var(--text);
+}
+
+.hubset__form,
+.hubset__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hubset__look {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.hubset__colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hubset__color {
+  width: 26px;
+  height: 26px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hubset__color.is-on {
+  border-color: var(--text);
+}
+
+.hubset__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.hubset__choices legend {
+  padding: 0 4px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.hubset__choices label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.hubset__choices input {
+  margin-top: 3px;
+}
+
+.hubset__rules {
+  min-height: 110px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.hubset__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hubset__spacer {
+  flex-grow: 1;
+}
+
+.hubset__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.hubset__row-name {
+  font-weight: 600;
+}
+
+.hubset__row-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hubset__select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.hubset__heading {
+  margin-top: 6px;
+}

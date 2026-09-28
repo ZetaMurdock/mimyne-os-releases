@@ -161,6 +161,49 @@ export function deleteBoard(hubId, boardId) {
   return deleteDoc(doc(db, 'hubs', hubId, 'boards', boardId));
 }
 
+// ------------------------------------------------------------ owner tools
+// A Hub's details, roles and people, for its owner (and, for people, its
+// mods): what the rules on hubs/{hub}, /roles and /members allow.
+
+export function updateHubDetails(hubId, { name, tagline, tag, color, visibility, postingPolicy, rules }) {
+  const optional = (value) => (value?.trim() ? value.trim() : deleteField());
+  return updateDoc(doc(db, 'hubs', hubId), {
+    name: name.trim(), tagline: optional(tagline), tag: optional(tag), color, visibility, postingPolicy, rules: optional(rules), updatedAt: serverTimestamp(),
+  });
+}
+export function createRole(hubId, roleId, { name, color, level, order = 0 }) {
+  return setDoc(doc(db, 'hubs', hubId, 'roles', roleId), { name: name.trim(), color, level, order });
+}
+export function updateRole(hubId, roleId, { name, color, order }) {
+  return updateDoc(doc(db, 'hubs', hubId, 'roles', roleId), {
+    ...(name !== undefined ? { name: name.trim() } : {}), ...(color !== undefined ? { color } : {}), ...(order !== undefined ? { order } : {}),
+  });
+}
+export function deleteRole(hubId, roleId) {
+  return deleteDoc(doc(db, 'hubs', hubId, 'roles', roleId));
+}
+/** Someone's role, given by the owner: a member or mod role, with its level. */
+export function setMemberRole(hubId, uid, { role, level }) {
+  return updateDoc(doc(db, 'hubs', hubId, 'members', uid), { role, level });
+}
+export function removeMember(hubId, uid) {
+  return deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
+}
+export function barPerson(hubId, uid, reason, me = auth.currentUser) {
+  return setDoc(doc(db, 'hubs', hubId, 'bars', uid), withoutEmpty({ by: me.uid, reason: reason?.trim(), createdAt: serverTimestamp() }));
+}
+export function unbarPerson(hubId, uid) {
+  return deleteDoc(doc(db, 'hubs', hubId, 'bars', uid));
+}
+/** Who is barred, live: the owner and mods read it. */
+export function watchBars(hubId, onChange, onError) {
+  return onSnapshot(
+    collection(db, 'hubs', hubId, 'bars'),
+    (snap) => onChange(snap.docs.map((d) => ({ uid: d.id, by: text(d.data().by, 128), reason: text(d.data().reason, 300), at: millis(d.data().createdAt) }))),
+    onError,
+  );
+}
+
 // ------------------------------------------------------------------- hubs
 
 export function hubAddressProblem(id) {
