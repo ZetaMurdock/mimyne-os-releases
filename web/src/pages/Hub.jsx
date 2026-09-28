@@ -13,6 +13,11 @@ import HubClips from '../components/hub/HubClips.jsx';
 import HubEarnings from '../components/hub/HubEarnings.jsx';
 import HubFiles from '../components/hub/HubFiles.jsx';
 import HubRooms from '../components/hub/HubRooms.jsx';
+import HubLook from '../components/hub/HubLook.jsx';
+import PanelBackground from '../components/PanelBackground.jsx';
+import { canSeePage, hasBackdrop, isVideoLink } from '../lib/hubLook.js';
+import { cropStyle } from '../lib/profileShapes.js';
+import { levelIn } from '../data/rooms.js';
 import { Avatar } from '../components/Avatar.jsx';
 import { createPost, getHub } from '../data/api.js';
 import { usePerson } from '../data/people.js';
@@ -57,8 +62,16 @@ export default function Hub() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inIt, hub.id]);
   const [params, setParams] = useSearchParams();
-  const tabs = user && hub.ownerId === user.uid ? [...TABS, EARNINGS] : TABS;
-  const tab = tabs.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'rooms';
+  // Its look, as the owner last saved it (changed here without loading the page again).
+  const [look, setLook] = useState(() => ({ ...hub }));
+  const [customizing, setCustomizing] = useState(false);
+  // In the app, its own additions (appSlots.js): the panel designer.
+  const slots = {};
+  // The pages the owner kept for some: not shown to the rest (and the rules
+  // refuse what is on them, lib/hubLook.js).
+  const level = levelIn(hub, user, members, access.isPledged);
+  const tabs = [...TABS.filter((t) => canSeePage(look, t.id, level)), ...(user && hub.ownerId === user.uid ? [EARNINGS] : [])];
+  const tab = tabs.some((t) => t.id === params.get('tab')) ? params.get('tab') : (tabs[0]?.id ?? 'rooms');
   const setTab = (id, extra = {}) =>
     setParams(Object.fromEntries(Object.entries({ tab: id === 'rooms' ? null : id, ...extra }).filter(([, v]) => v)), { replace: true, preventScrollReset: true });
   const [sharing, setSharing] = useState(false);
@@ -73,12 +86,32 @@ export default function Hub() {
   }
 
   return (
-    <div className={`hub ${user ? 'hub--under-notch' : ''}`}>
-      <div className="hub__banner" style={{ background: `${hub.color}2e` }} />
+    <div className={`hub ${user ? 'hub--under-notch' : ''} ${hasBackdrop(look) ? 'hub--backdrop' : ''}`}>
+      {/* The background behind the whole page: a picture or video, or the
+          panels the owner laid out in the app (lib/hubLook.js). */}
+      {look.bgMode === 'image' && look.background && (
+        <div className="hub__backdrop" aria-hidden="true">
+          {isVideoLink(look.background)
+            ? <video src={look.background} autoPlay loop muted playsInline style={cropStyle(look.backgroundCrop)} />
+            : <img src={look.background} alt="" referrerPolicy="no-referrer" style={cropStyle(look.backgroundCrop)} />}
+          <div className="hub__backdrop-dim" style={{ opacity: look.backgroundDim }} />
+        </div>
+      )}
+      {look.bgMode === 'panels' && look.bgPanels.some((p) => p.src) && (
+        <div className="hub__backdrop" aria-hidden="true">
+          <PanelBackground panels={look.bgPanels} dividers={look.bgDividers} lineWidth={look.bgPanelGap} lineColor={look.bgPanelLineColor} />
+          <div className="hub__backdrop-dim" style={{ opacity: look.backgroundDim }} />
+        </div>
+      )}
+      <div className="hub__banner" style={{ background: `${hub.color}2e` }}>
+        {look.banner && (isVideoLink(look.banner)
+          ? <video src={look.banner} autoPlay loop muted playsInline style={cropStyle(look.bannerCrop)} />
+          : <img src={look.banner} alt="" referrerPolicy="no-referrer" style={cropStyle(look.bannerCrop)} />)}
+      </div>
 
       <div className="hub__identity">
         <span className="hub__icon">
-          <HubIcon hub={hub} size={96} />
+          <HubIcon hub={{ ...hub, icon: look.icon }} size={96} />
         </span>
         <div className="hub__names">
           <h1 className="hub__name">{hub.name}</h1>
@@ -89,6 +122,9 @@ export default function Hub() {
           </p>
         </div>
         <div className="hub__actions">
+          {user && hub.ownerId === user.uid && (
+            <Button icon="pen" onClick={() => setCustomizing(true)} title="Its icon, banner, background and pages">Customize</Button>
+          )}
           <Button icon="share" iconOnly aria-label="Share this Hub" onClick={() => setSharing(true)} />
           <PledgeButton hub={hub} pledgedHere={access.isPledged} />
           {user && hub.ownerId !== user.uid && (
@@ -199,6 +235,16 @@ export default function Hub() {
         <ReportDialog
           about={{ targetUid: hub.ownerId, kind: 'hub', link: `/h/${hub.id}`, excerpt: [hub.name, hub.tagline].filter(Boolean).join(' · ') }}
           onClose={() => setReporting(false)}
+        />
+      )}
+      {customizing && (
+        <HubLook
+          hub={hub}
+          look={look}
+          roles={roles}
+          panelsDesigner={slots.hubPanelsDesigner || null}
+          onClose={() => setCustomizing(false)}
+          onSaved={setLook}
         />
       )}
       {sharing && (

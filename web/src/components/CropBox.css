@@ -1,0 +1,68 @@
+.cropbox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cropbox__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cropbox__reset {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.cropbox__reset:hover {
+  color: var(--text);
+}
+
+.cropbox__row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.cropbox__frame {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: #000;
+  user-select: none;
+  touch-action: none;
+}
+
+.cropbox__frame.can-drag {
+  cursor: grab;
+}
+
+.cropbox__frame.is-dragging {
+  cursor: grabbing;
+}
+
+.cropbox__side {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.cropbox__side input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.cropbox__hint {
+  font-size: 11px;
+  line-height: 1.4;
+}
