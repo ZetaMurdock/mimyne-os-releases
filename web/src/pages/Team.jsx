@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/Button.jsx';
 import { lookupUsername } from '../data/identity.js';
-import { LEVELS, fetchStaffLevel, fetchTeam, setTeamMember } from '../data/moderation.js';
+import { LEVELS, fetchStaffLevel, fetchTeam, sendTestMail, setTeamMember } from '../data/moderation.js';
 import { usePerson } from '../data/people.js';
 import { useSession } from '../data/session.jsx';
 import NeedsAccount from './NeedsAccount.jsx';
@@ -132,6 +132,8 @@ function TeamList() {
           </ul>
         )}
       </section>
+
+      <MailTest />
     </div>
   );
 }
@@ -147,5 +149,38 @@ function Member({ member: m, busy, onChange }) {
       </select>
       <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (window.confirm(`Take @${person.username} off the team?`)) onChange(m.uid, null); }}>Remove</Button>
     </li>
+  );
+}
+
+// Proof that Mimyne's email works, for whoever set it up (docs/operations.md,
+// "Email"): the file service mails the Owner themselves.
+function MailTest() {
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState(null);
+
+  async function send() {
+    setBusy(true);
+    setSaid(null);
+    try {
+      const sent = await sendTestMail();
+      setSaid(`Sent to ${sent?.to ?? 'your address'}. Look in your inbox, and in spam the first time.`);
+    } catch (error) {
+      setSaid(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card team__card">
+      <h2 className="team__h2">Email</h2>
+      <p className="muted">
+        Moderation notices, payout emails and recovery links all go out through the file service. Send yourself one to see that it works.
+      </p>
+      <div className="team__form">
+        <Button size="sm" variant="secondary" loading={busy} onClick={send}>Send me a test email</Button>
+      </div>
+      {said && <p className="muted team__said" role="status">{said}</p>}
+    </section>
   );
 }

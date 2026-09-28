@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Button from '../Button.jsx';
 import Icon from '../Icon.jsx';
-import { fetchHubEarnings, fetchPayoutAccount, money, monthName, openStripeDashboard, startPayouts } from '../../data/support.js';
+import { fetchHubEarnings, fetchPayoutAccount, money, monthName, openStripeDashboard, setHubProFromBalance, startPayouts } from '../../data/support.js';
 import './HubEarnings.css';
 
 // Hub → Earnings, for its owner: what the Hub would be owed this month if
@@ -82,6 +82,12 @@ export default function HubEarnings({ hub }) {
             <dd>{view.nextReleaseAt ? new Date(view.nextReleaseAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'Nothing held'}</dd>
           </div>
         </dl>
+        {view.unclaimed && (
+          <p className="earnings__warn" role="status">
+            Set up payouts by {day(view.unclaimed.expiresAt)}: {money(view.unclaimed.cents)} of this balance starts to expire then, under the program's
+            terms. A released balance keeps for a year while payouts are not set up; setting them up claims all of it.
+          </p>
+        )}
         <p className="muted earnings__note">
           A month's earnings are added on the 5th of the next month and held before they are released: 90 days for a new owner, the card-dispute
           window, 30 once six months in a row have earned with nothing reversed. Payouts go out on the 15th from the released balance when it
@@ -108,6 +114,8 @@ export default function HubEarnings({ hub }) {
       </section>
 
       <Payouts />
+
+      <HubPro hub={hub} view={view} />
     </div>
   );
 }
@@ -115,11 +123,13 @@ export default function HubEarnings({ hub }) {
 // The ledger, as the owner reads it: each month's earning, a reversal when a
 // Plus payment that funded a month was refunded, and each payout with its
 // Stripe reference. Newest first. Nothing in it is ever edited.
-const KINDS = { earning: 'Earned', reversal: 'Reversed', payout: 'Paid out', hub_pro: 'Hub Pro', adjustment: 'Adjustment' };
+const KINDS = { earning: 'Earned', reversal: 'Reversed', payout: 'Paid out', hub_pro: 'Hub Pro', expiry: 'Expired', adjustment: 'Adjustment' };
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
 function standing(entry) {
   if (entry.state === 'paid') return entry.at ? `Sent ${day(entry.at)}` : 'Sent';
+  if (entry.state === 'spent') return entry.until ? `From the balance, on until ${day(entry.until)}` : 'From the balance';
+  if (entry.state === 'expired') return 'Unclaimed for a year';
   if (entry.state === 'review') return 'Waiting for review';
   if (entry.state === 'held') return entry.releaseAt ? `Held until ${day(entry.releaseAt)}` : 'Held';
   if (entry.state === 'settled') return 'Paid out';
@@ -261,6 +271,55 @@ function Payouts() {
               Change account
             </Button>
           </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+// Hub Pro paid from the balance instead of a card, once Mimyne offers it:
+// $11.99 comes out on the 15th before the payout, only when the released
+// balance covers it, and never while a card subscription still does. Until
+// it is offered, the card only says how Hub Pro stands.
+function HubPro({ hub, view }) {
+  const pro = view.hubPro ?? {};
+  const [on, setOn] = useState(pro.fromBalance === true);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState(null);
+  if (!pro.available && !pro.active) return null;
+
+  async function choose(next) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const saved = await setHubProFromBalance(hub.id, next);
+      setOn(saved?.fromBalance === true);
+    } catch (error) {
+      setProblem(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card earnings__card">
+      <h2 className="earnings__h2">Hub Pro</h2>
+      {problem && <p className="earnings__problem" role="alert">{problem}</p>}
+      <p className="muted">
+        {pro.active
+          ? `Hub Pro is on until ${day(pro.until)}, paid ${pro.source === 'balance' ? "from this Hub's balance" : 'by card'}.`
+          : `${hub.name} does not have Hub Pro.`}
+      </p>
+      {pro.available && (
+        <>
+          <label className="earnings__choice">
+            <input type="checkbox" checked={on} disabled={busy} onChange={(e) => choose(e.target.checked)} />
+            <span>Pay Hub Pro from this Hub's balance, {money(pro.priceCents)} a month</span>
+          </label>
+          <p className="muted earnings__note">
+            It comes out on the 15th, before the payout, only when the released balance covers it: a month the balance cannot cover is simply not
+            bought, and nothing is taken while a card subscription still covers the Hub. Each month bought is in History.
+          </p>
         </>
       )}
     </section>
