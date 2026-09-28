@@ -54,6 +54,25 @@ function markSeen(id) {
   }
 }
 
+// A message half written is kept on this device, per conversation, until
+// it is sent or cleared - so switching conversations loses nothing.
+const DRAFT_KEY = 'mimyne.draft.';
+function draftOf(id) {
+  try {
+    return localStorage.getItem(DRAFT_KEY + id) ?? '';
+  } catch {
+    return '';
+  }
+}
+function saveDraft(id, value) {
+  try {
+    if (value) localStorage.setItem(DRAFT_KEY + id, value);
+    else localStorage.removeItem(DRAFT_KEY + id);
+  } catch {
+    // Storage blocked: the draft lives only while the page does.
+  }
+}
+
 function Inbox({ me }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -152,7 +171,7 @@ function Row({ convo, me, active, unread }) {
 function Conversation({ convo, me }) {
   const { title, icon, person } = useTitle(convo);
   const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => draftOf(convo.id));
   const [files, setFiles] = useState([]);
   const [progress, setProgress] = useState({});
   const [sending, setSending] = useState(false);
@@ -167,6 +186,8 @@ function Conversation({ convo, me }) {
   // Who is typing (their stamps), and my own stamps as I type (lib/typing.js).
   const [typing, setTyping] = useState({});
   const stamper = useRef(null);
+  // Files being dragged over the conversation: the drop target shows.
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load.")), [convo.id]);
   useEffect(() => watchTyping(convo.id, setTyping), [convo.id]);
@@ -197,6 +218,7 @@ function Conversation({ convo, me }) {
         replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null,
       });
       setText('');
+      saveDraft(convo.id, '');
       stamper.current?.stop();
       if (input.current) input.current.style.height = 'auto';
       setFiles([]);
@@ -266,7 +288,29 @@ function Conversation({ convo, me }) {
 
   return (
     <>
-      <section className="inbox__thread" aria-label={`Conversation with ${title}`}>
+      <section
+        className={`inbox__thread${dragging ? ' is-dragging' : ''}`}
+        aria-label={`Conversation with ${title}`}
+        // Files dropped anywhere on the conversation go along with the next message, as in a Room.
+        onDragOver={(e) => {
+          if (![...e.dataTransfer.types].includes('Files')) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget) || setDragging(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return;
+          e.preventDefault();
+          setDragging(false);
+          addFiles(e.dataTransfer.files);
+        }}
+      >
+        {dragging && (
+          <div className="inbox__drop" aria-hidden="true">
+            <Icon name="upload" size={32} />
+            <strong>Drop to send to {title}</strong>
+          </div>
+        )}
         <header className="inbox__head">
           {person ? <Link to={`/people/${person.uid}`}>{icon(36)}</Link> : icon(36)}
           <span className="inbox__head-text">
@@ -352,7 +396,7 @@ function Conversation({ convo, me }) {
               placeholder={`Message ${title}. Any file, any size.`}
               maxLength={4000}
               value={text}
-              onChange={(e) => { setText(e.target.value); stamper.current?.typed(e.target.value); }}
+              onChange={(e) => { setText(e.target.value); saveDraft(convo.id, e.target.value); stamper.current?.typed(e.target.value); }}
               onInput={(e) => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 200)}px`; }}
               onKeyDown={(e) => {
                 if (applyFormatKey(e, e.currentTarget, setText)) { e.preventDefault(); return; }
