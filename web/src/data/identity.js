@@ -31,7 +31,7 @@ const OFFICIAL = /^(mimyne|mimyneos|mimyne ?(os|staff|team|support|official)|sta
 export const MAX_DISPLAY_NAME = 60;
 
 /** A display name as it will be saved: hidden characters out, spaces tidied. */
-export const tidyDisplayName = (name) => String(name ?? '').replace(HIDDEN, '').replace(/\s+/g, ' ').trim();
+export const tidyDisplayName = (name) => String(name ?? '').replace(/\s+/g, ' ').replace(HIDDEN, '').trim();
 
 /** Why a display name can't be used, or null. Empty is fine: the username shows instead. */
 export function displayNameProblem(name) {

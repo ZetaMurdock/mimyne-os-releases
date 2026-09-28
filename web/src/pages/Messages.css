@@ -543,3 +543,99 @@
 .msg .linkp--tall {
   width: 280px;
 }
+
+/* Groups: who is in one, and a group's tools; a call on Discord. */
+.inbox__head-members {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--t-caption);
+  text-align: left;
+  cursor: pointer;
+}
+
+.inbox__head-members:hover {
+  color: var(--text);
+}
+
+.inbox__head > .btn {
+  flex-shrink: 0;
+}
+
+.inbox__call {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.inbox__call + .btn {
+  margin-left: 0;
+}
+
+.inbox__head-text + .btn {
+  margin-left: auto;
+}
+
+.group-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.group-form__name {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.group-form__name .field {
+  flex-grow: 1;
+}
+
+.buddy-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.buddy-pick__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.buddy-pick__row:hover {
+  background: var(--surface-1);
+}
+
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.members__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.members__who {
+  display: flex;
+  flex-grow: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+}

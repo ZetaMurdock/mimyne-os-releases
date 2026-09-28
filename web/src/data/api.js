@@ -3,6 +3,7 @@
 // decide who may do what; this file only asks.
 import { plainText } from '../lib/messageFormat.js';
 import { cleanReactions } from '../lib/reactions.js';
+import { cleanFolders } from '../lib/hubFolders.js';
 import {
   addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
@@ -516,6 +517,8 @@ function cleanConversation(id, data, uid) {
     members: Array.isArray(data.members) ? data.members.filter((m) => typeof m === 'string') : [],
     title: text(data.title, 80),
     hubId: text(data.hubId, 32) || null,
+    // Who started it: in a group, the one who may put someone out.
+    createdBy: text(data.createdBy, 128),
     lastText: text(data.lastText, 200),
     lastFrom: text(data.lastFrom, 128),
     at: millis(data.lastAt ?? data.createdAt),
@@ -620,6 +623,49 @@ export function editMessage(convoId, messageId, words) {
 
 export function deleteMessage(convoId, messageId) {
   return deleteDoc(doc(db, 'conversations', convoId, 'messages', messageId));
+}
+
+/**
+ * The inbox line after the last message was edited or deleted, by whoever
+ * sent it: the rules let only them change it, and only the line, so the
+ * conversation keeps its place.
+ */
+export function refreshPreview(convoId, lastText) {
+  return updateDoc(doc(db, 'conversations', convoId), { lastText: String(lastText ?? '').slice(0, 200) });
+}
+
+// ----------------------------------------------------------------- groups
+// A group starts with its maker alone; Buddies are brought in one at a
+// time (each named in `added`, which the rules check against the buddy
+// list); anyone may leave; only its maker puts someone out.
+
+export async function createGroup(uid, title) {
+  const ref = await addDoc(collection(db, 'conversations'), withoutEmpty({
+    kind: 'group', members: [uid], title: title?.trim().slice(0, 80) || undefined, createdBy: uid, createdAt: serverTimestamp(),
+  }));
+  return ref.id;
+}
+export function addToGroup(convoId, uid) {
+  return updateDoc(doc(db, 'conversations', convoId), { members: arrayUnion(uid), added: uid });
+}
+export function removeFromGroup(convoId, uid) {
+  return updateDoc(doc(db, 'conversations', convoId), { members: arrayRemove(uid), removed: uid });
+}
+export function leaveGroup(convoId, uid) {
+  return updateDoc(doc(db, 'conversations', convoId), { members: arrayRemove(uid) });
+}
+export function renameGroup(convoId, title) {
+  return updateDoc(doc(db, 'conversations', convoId), { title: String(title ?? '').trim().slice(0, 80) });
+}
+
+// ------------------------------------------------------------ hub folders
+// How you sort the Hubs in the notch (lib/hubFolders.js): yours alone.
+
+export function watchHubFolders(uid, onChange, onError) {
+  return onSnapshot(doc(db, 'hub_folders', uid), (snap) => onChange(cleanFolders(snap.exists() ? snap.data() : [])), onError);
+}
+export function saveHubFolders(uid, folders) {
+  return setDoc(doc(db, 'hub_folders', uid), { folders: cleanFolders(folders), updatedAt: serverTimestamp() });
 }
 
 /**

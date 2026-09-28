@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon.jsx';
 import { keepLink, keepUpload, removeFromLibrary, watchLibrary } from '../data/library.js';
 import { useSession } from '../data/session.jsx';
@@ -52,14 +53,55 @@ function remember(char) {
  * ({ kind: 'gif', url, title, width, height } or { kind: 'library', item }).
  * `emojiOnly` for places that take words alone.
  */
+// The panel's size: as big as this, or as big as the window allows.
+const PANEL_WIDTH = 380;
+const PANEL_HEIGHT = 440;
+const GAP = 10;
+const EDGE = 12;
+
+/**
+ * Where the panel goes, against the window: above the button when asked and
+ * there is room (or more room than below), otherwise below, and never past
+ * an edge. The panel is drawn at the top of the document, so no scrolling
+ * box between the button and the page can cut it off.
+ */
+export function placePanel(button, { placement, align, width: vw, height: vh }) {
+  const width = Math.min(PANEL_WIDTH, vw - EDGE * 2);
+  const height = Math.min(PANEL_HEIGHT, vh - EDGE * 2);
+  const above = button.top - GAP - EDGE;
+  const below = vh - button.bottom - GAP - EDGE;
+  const up = placement === 'up' ? above >= height || above >= below : !(below >= height || below >= above);
+  const top = up ? Math.max(EDGE, button.top - GAP - height) : Math.min(vh - EDGE - height, button.bottom + GAP);
+  const left = Math.max(EDGE, Math.min(align === 'end' ? button.right - width : button.left, vw - EDGE - width));
+  return { top, left, width, height, up };
+}
+
 export default function MediaPicker({ onEmoji, onPick, emojiOnly = false, placement = 'up', align = 'start', label = 'Emoji, GIFs and stickers' }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState('emoji');
+  const [spot, setSpot] = useState(null);
   const root = useRef(null);
+  const panel = useRef(null);
+
+  // Placed when it opens, and again if the window changes or anything scrolls.
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const place = () => {
+      const button = root.current?.getBoundingClientRect();
+      if (button) setSpot(placePanel(button, { placement, align, width: window.innerWidth, height: window.innerHeight }));
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, placement, align]);
 
   useEffect(() => {
     if (!open) return undefined;
-    const away = (e) => root.current && !root.current.contains(e.target) && setOpen(false);
+    const away = (e) => root.current && !root.current.contains(e.target) && !panel.current?.contains(e.target) && setOpen(false);
     const key = (e) => e.key === 'Escape' && setOpen(false);
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', key);
@@ -79,8 +121,14 @@ export default function MediaPicker({ onEmoji, onPick, emojiOnly = false, placem
       <button type="button" className={`picker__trigger ${open ? 'is-open' : ''}`} aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Icon name="smile" size={18} />
       </button>
-      {open && (
-        <div className={`picker__panel picker__panel--${placement} picker__panel--${align}`} role="dialog" aria-label={label}>
+      {open && spot && createPortal(
+        <div
+          ref={panel}
+          className={`picker__panel ${spot.up ? 'picker__panel--up' : 'picker__panel--down'}`}
+          style={{ top: spot.top, left: spot.left, width: spot.width, height: spot.height }}
+          role="dialog"
+          aria-label={label}
+        >
           {!emojiOnly && (
             <div className="picker__tabs" role="tablist">
               {[
@@ -98,7 +146,8 @@ export default function MediaPicker({ onEmoji, onPick, emojiOnly = false, placem
           {(emojiOnly || tab === 'emoji') && <EmojiTab onEmoji={(c) => (remember(c), onEmoji?.(c))} />}
           {!emojiOnly && (tab === 'gifs' || tab === 'stickers') && <GifTab key={tab} type={tab} onPick={pick} />}
           {!emojiOnly && tab === 'library' && <LibraryTab onPick={pick} />}
-        </div>
+        </div>,
+        document.body,
       )}
     </span>
   );
