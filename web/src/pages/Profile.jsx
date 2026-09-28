@@ -17,6 +17,8 @@ import { useVotes } from '../components/useVotes.js';
 import { AvatarWithStatus, StatusControls, StatusLine } from '../components/Presence.jsx';
 import { createPost, openDirect, stalk, unstalk } from '../data/api.js';
 import { notifyProfileLike, notifyStalk } from '../data/notifications.js';
+import { MAX_DISPLAY_NAME, displayNameProblem, setDisplayName } from '../data/identity.js';
+import { forgetProfile } from '../data/people.js';
 import { acceptBuddy, askBuddy, cancelBuddyRequest, getProfile, watchPresence } from '../data/profile.js';
 import { useSession } from '../data/session.jsx';
 import { db } from '../lib/firebase.js';
@@ -66,6 +68,8 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
   const [view, setView] = useState('profile');
   const [presence, setPresence] = useState({ listening: null, playing: null });
   const [error, setError] = useState(null);
+  const [name, setName] = useState(profile.displayName);
+  const [naming, setNaming] = useState(false);
   const mine = user.uid === profile.uid;
   const background = !hidden && page?.background;
 
@@ -152,7 +156,27 @@ function ProfileView({ profile, page, hidden, posts: loaded, songs, showcase, st
           <AvatarWithStatus person={profile} size={104} />
         </span>
         <div className="profile__names">
-          <h1 className="profile__name">{profile.displayName || profile.username}</h1>
+          {naming ? (
+            <NameEditor
+              uid={profile.uid}
+              current={name}
+              username={profile.username}
+              onDone={(saved) => {
+                if (saved !== undefined) {
+                  setName(saved);
+                  forgetProfile(profile.uid);
+                }
+                setNaming(false);
+              }}
+            />
+          ) : (
+            <div className="profile__name-row">
+              <h1 className="profile__name">{name || profile.username}</h1>
+              {mine && (
+                <Button variant="ghost" icon="pen" iconOnly aria-label="Change your display name" title="Change your display name" onClick={() => setNaming(true)} />
+              )}
+            </div>
+          )}
           <div className="profile__meta">
             <span>@{profile.username}</span>
             {!hidden && page?.discord && <DiscordChips show={page.discord} />}
@@ -352,5 +376,48 @@ function WorkspaceBubble({ card, ownerUid, mine }) {
       </div>
       <ApproveBar small count={votes.approvals} mine={votes.mine} onVote={votes.onVote} disabled={mine} />
     </div>
+  );
+}
+
+// Your display name, changed where it shows. Empty goes back to your username.
+function NameEditor({ uid, current, username, onDone }) {
+  const [value, setValue] = useState(current || '');
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState(null);
+
+  async function save(event) {
+    event.preventDefault();
+    const trouble = displayNameProblem(value);
+    if (trouble) return setProblem(trouble);
+    setSaving(true);
+    setProblem(null);
+    try {
+      onDone(await setDisplayName(uid, value));
+    } catch (err) {
+      setProblem(err.code === 'permission-denied' ? "Your name couldn't be saved. Try again." : err.message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="profile__name-form" onSubmit={save} onKeyDown={(e) => e.key === 'Escape' && onDone()}>
+      <label className="field">
+        Display name
+        <input
+          className="field__input"
+          value={value}
+          maxLength={MAX_DISPLAY_NAME}
+          placeholder={username}
+          autoFocus
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <p className="muted profile__name-hint">Shown on your profile and beside what you post. Leave it empty to use @{username}.</p>
+      {problem && <p className="form-error" role="alert">{problem}</p>}
+      <div className="profile__name-actions">
+        <Button type="submit" variant="primary" loading={saving}>Save</Button>
+        <Button onClick={() => onDone()} disabled={saving}>Cancel</Button>
+      </div>
+    </form>
   );
 }

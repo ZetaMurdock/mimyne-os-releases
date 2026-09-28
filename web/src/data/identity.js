@@ -2,7 +2,7 @@
 // src/runtime/identity.js: one username per person, 3 to 20 letters, digits
 // or underscores, unique whatever the capitals, claimed in one batch with
 // the profile that carries it.
-import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 
 const RESERVED = new Set([
@@ -21,6 +21,33 @@ export function usernameProblem(name) {
   if (!/^[A-Za-z0-9_]{3,20}$/.test(trimmed)) return 'Letters, numbers and underscores only.';
   if (RESERVED.has(trimmed.toLowerCase())) return 'That name is reserved.';
   return null;
+}
+
+// Characters that draw nothing (zero-width, direction overrides, fillers),
+// and control characters: a name made of them looks blank or like someone else's.
+const HIDDEN = /[\u0000-\u001f\u007f\u00ad\u061c\u115f\u1160\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff9-\ufffb]/g;
+// Display names that would read as Mimyne speaking.
+const OFFICIAL = /^(mimyne|mimyneos|mimyne ?(os|staff|team|support|official)|staff|admin|administrator|moderator|official|support|system)$/i;
+export const MAX_DISPLAY_NAME = 60;
+
+/** A display name as it will be saved: hidden characters out, spaces tidied. */
+export const tidyDisplayName = (name) => String(name ?? '').replace(HIDDEN, '').replace(/\s+/g, ' ').trim();
+
+/** Why a display name can't be used, or null. Empty is fine: the username shows instead. */
+export function displayNameProblem(name) {
+  const tidy = tidyDisplayName(name);
+  if (tidy.length > MAX_DISPLAY_NAME) return `At most ${MAX_DISPLAY_NAME} characters.`;
+  if (OFFICIAL.test(tidy)) return 'That name is kept for Mimyne itself.';
+  return null;
+}
+
+/** Your display name: the big name on your profile and beside what you post. */
+export async function setDisplayName(uid, name) {
+  const problem = displayNameProblem(name);
+  if (problem) throw new Error(problem);
+  const displayName = tidyDisplayName(name);
+  await updateDoc(doc(db, 'profiles', uid), { displayName });
+  return displayName;
 }
 
 const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');

@@ -79,6 +79,29 @@ body:has(.profile--backdrop) {
   padding-bottom: 4px;
 }
 
+.profile__name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile__name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.profile__name-hint {
+  font-size: 12.5px;
+}
+
+.profile__name-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .profile__name {
   overflow: hidden;
   font-family: var(--font-display);
