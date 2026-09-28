@@ -88,7 +88,7 @@ function Form({ me }) {
       </label>
 
       <fieldset className="new-hub__group">
-        <legend className="field">Colour</legend>
+        <legend className="field">Color</legend>
         <div className="new-hub__swatches">
           {HUB_COLORS.map((c) => (
             <button
@@ -96,7 +96,7 @@ function Form({ me }) {
               type="button"
               className="new-hub__swatch"
               style={{ background: c }}
-              aria-label={`Colour ${c}`}
+              aria-label={`Color ${c}`}
               aria-pressed={color === c}
               onClick={() => setColor(c)}
             />

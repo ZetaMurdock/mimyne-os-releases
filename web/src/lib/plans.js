@@ -61,7 +61,7 @@ export const COMPARE = [
   ['Hubs you own', '3', '10'],
   ['Canvas in your Hubs', '300 notes per Room', '2,000 notes per Room + export'],
   ['Converter', 'One file at a time', 'Larger files + several at once'],
-  ['Hub appearance', 'Standard', 'Custom banners, colours and Room icons'],
+  ['Hub appearance', 'Standard', 'Custom banners, colors and Room icons'],
   ['Chat', 'Full history', 'Search across all your chats, and pinned messages'],
   ['New features', 'At launch', 'Early access'],
   ['Profile cosmetics', 'Standard', 'Themes, auras, animated picture and badge (after launch)'],
