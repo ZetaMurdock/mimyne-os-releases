@@ -20,11 +20,12 @@ import { applyFormatKey } from '../lib/composer.js';
 import { plainText } from '../lib/messageFormat.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
-  clearTyping, deleteMessage, editMessage, getHubCard, markRead, openDirect, sendMessage, setMyReactions, stampTyping, watchConversations,
-  watchMessages, watchTyping,
+  addToGroup, clearTyping, createGroup, deleteMessage, editMessage, getBuddies, getHubCard, leaveGroup, markRead, openDirect,
+  refreshPreview, removeFromGroup, renameGroup, sendMessage, setMyReactions, stampTyping, watchConversations, watchMessages, watchTyping,
 } from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
-import { usePerson } from '../data/people.js';
+import { loadProfile, usePerson } from '../data/people.js';
+import { discordShowOf } from '../data/profile.js';
 import { useSession } from '../data/session.jsx';
 import { uploadPicked } from '../lib/files.js';
 import { formatBytes, timeAgo } from '../lib/format.js';
@@ -79,6 +80,7 @@ function Inbox({ me }) {
   const [conversations, setConversations] = useState(null);
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [grouping, setGrouping] = useState(false);
   const active = conversations?.find((c) => c.id === id) ?? (id ? null : conversations?.[0]);
   // A conversation counts as started once the server has had it, even while
   // a later change (a new last message) is still on its way.
@@ -101,7 +103,8 @@ function Inbox({ me }) {
       <nav className="inbox__list" aria-label="Conversations">
         <div className="inbox__heading">
           <h1>Messages</h1>
-          <Button variant="ghost" icon="pen" iconOnly aria-label="New message" onClick={() => setStarting(true)} />
+          <Button variant="ghost" icon="pen" iconOnly aria-label="New message" title="New message" onClick={() => setStarting(true)} />
+          <Button variant="ghost" icon="users" iconOnly aria-label="New group" title="New group" onClick={() => setGrouping(true)} />
         </div>
         {error && <p className="form-error">{error}</p>}
         {conversations?.length === 0 && <p className="muted inbox__none">No conversations yet. Start one with the pen above.</p>}
@@ -134,24 +137,55 @@ function Inbox({ me }) {
           }}
         />
       )}
+      {grouping && (
+        <NewGroup
+          me={me}
+          onClose={() => setGrouping(false)}
+          onOpen={(convoId) => {
+            setGrouping(false);
+            navigate(`/messages/${convoId}`);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** What a conversation is called, and its picture. */
-function useTitle(convo) {
+/** The names of some people, read once each and remembered (data/people.js). */
+function useNames(uids) {
+  const [names, setNames] = useState({});
+  const key = uids.join(',');
+  useEffect(() => {
+    let live = true;
+    Promise.all(uids.map((uid) => loadProfile(uid).then((p) => [uid, p?.displayName || p?.username || 'Someone'])))
+      .then((pairs) => live && setNames(Object.fromEntries(pairs)));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return names;
+}
+
+/** What a conversation is called, and its picture. A group with no name is called by who is in it. */
+function useTitle(convo, meUid) {
   const person = usePerson(convo.other);
   const [hub, setHub] = useState(null);
+  const others = convo.kind === 'group' && !convo.title ? convo.members.filter((m) => m !== meUid).slice(0, 3) : [];
+  const names = useNames(others);
   useEffect(() => {
     if (convo.hubId) getHubCard(convo.hubId).then(setHub);
   }, [convo.hubId]);
   if (convo.kind === 'direct') return { title: person.name, icon: (size) => <Avatar person={person} size={size} />, person };
   if (hub) return { title: convo.title || hub.name, icon: (size) => <HubIcon hub={hub} size={size} /> };
-  return { title: convo.title || 'Group', icon: (size) => <HubIcon hub={{ name: convo.title || 'G', color: '#3F3F46' }} size={size} /> };
+  const more = convo.members.length - 1 - others.length;
+  const called = convo.title
+    || (others.length ? others.map((uid) => names[uid] ?? '…').join(', ') + (more > 0 ? ` and ${more} more` : '') : 'Just you');
+  return { title: called, icon: (size) => <HubIcon hub={{ name: convo.title || called, color: '#3F3F46' }} size={size} /> };
 }
 
 function Row({ convo, me, active, unread }) {
-  const { title, icon } = useTitle(convo);
+  const { title, icon } = useTitle(convo, me.uid);
   const preview = convo.lastText ? `${convo.lastFrom === me.uid ? 'You: ' : ''}${convo.lastText}` : 'New conversation';
   return (
     <NavLink to={`/messages/${convo.id}`} className={`inbox__row ${active ? 'is-active' : ''}`} preventScrollReset>
@@ -169,7 +203,7 @@ function Row({ convo, me, active, unread }) {
 }
 
 function Conversation({ convo, me }) {
-  const { title, icon, person } = useTitle(convo);
+  const { title, icon, person } = useTitle(convo, me.uid);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState(() => draftOf(convo.id));
   const [files, setFiles] = useState([]);
@@ -188,6 +222,19 @@ function Conversation({ convo, me }) {
   const stamper = useRef(null);
   // Files being dragged over the conversation: the drop target shows.
   const [dragging, setDragging] = useState(false);
+  // A group's members dialog; and, in a direct chat, the other person's
+  // Discord when they put it on their page, for a call there.
+  const [members, setMembers] = useState(false);
+  const [discord, setDiscord] = useState(null);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!convo.other) return undefined;
+    let live = true;
+    discordShowOf(convo.other).then((show) => live && setDiscord(show));
+    return () => {
+      live = false;
+    };
+  }, [convo.other]);
 
   useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load.")), [convo.id]);
   useEffect(() => watchTyping(convo.id, setTyping), [convo.id]);
@@ -260,6 +307,8 @@ function Conversation({ convo, me }) {
     if (!words.trim() || words.trim() === message.text) return;
     try {
       await editMessage(convo.id, message.id, words);
+      // The inbox's line follows an edit of the last message.
+      if (messages[messages.length - 1]?.id === message.id) await refreshPreview(convo.id, plainText(words)).catch(() => {});
     } catch {
       setError("That edit didn't save.");
     }
@@ -269,6 +318,7 @@ function Conversation({ convo, me }) {
     if (!window.confirm('Delete this message for everyone?')) return;
     try {
       await deleteMessage(convo.id, message.id);
+      if (messages[messages.length - 1]?.id === message.id) await refreshPreview(convo.id, 'Deleted a message').catch(() => {});
     } catch {
       setError("That message couldn't be deleted.");
     }
@@ -320,7 +370,18 @@ function Conversation({ convo, me }) {
                 <StatusLine uid={person.uid} />
               </Link>
             )}
+            {convo.kind === 'group' && (
+              <button type="button" className="inbox__head-sub inbox__head-members" onClick={() => setMembers(true)}>
+                {convo.members.length} {convo.members.length === 1 ? 'member' : 'members'}
+              </button>
+            )}
           </span>
+          {/* Discord gives no way for another app to start a call, so the nearest
+              thing: their profile opens in Discord, where the call button is. */}
+          {discord?.id && <CallOnDiscord id={discord.id} name={title} />}
+          {convo.kind === 'group' && (
+            <Button variant="ghost" icon="users" iconOnly aria-label="Members" title="Members" onClick={() => setMembers(true)} />
+          )}
         </header>
 
         <div className="inbox__messages">
@@ -448,6 +509,17 @@ function Conversation({ convo, me }) {
 
       {reporting && (
         <ReportDialog about={{ targetUid: reporting.from, kind: 'message', excerpt: reporting.text }} onClose={() => setReporting(null)} />
+      )}
+      {members && (
+        <GroupMembers
+          convo={convo}
+          me={me}
+          onClose={() => setMembers(false)}
+          onLeft={() => {
+            setMembers(false);
+            navigate('/messages');
+          }}
+        />
       )}
       {forwarding && (
         <ShareDialog
@@ -616,5 +688,215 @@ function NewMessage({ me, onClose, onOpen }) {
         </Button>
       </form>
     </Dialog>
+  );
+}
+
+// Their profile in Discord (the app when it is installed, else the website),
+// where a call can be started. Inside the Mimyne app the link is handed to
+// the system by the app itself (SocialApp opens outside links).
+function CallOnDiscord({ id, name }) {
+  const inApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  function call(event) {
+    if (inApp) return;
+    event.preventDefault();
+    const started = Date.now();
+    window.location.href = `discord://-/users/${id}`;
+    // Nothing took the link within a moment: the website has the profile too.
+    setTimeout(() => {
+      if (document.hasFocus() && Date.now() - started < 2500) window.open(`https://discord.com/users/${id}`, '_blank', 'noopener,noreferrer');
+    }, 1200);
+  }
+  return (
+    <a className="btn btn--secondary btn--sm inbox__call" href={`discord://-/users/${id}`} onClick={call} title={`Open ${name} in Discord, where you can call`}>
+      Call on Discord
+    </a>
+  );
+}
+
+// A group: named or not, its maker alone at first, Buddies brought in.
+function NewGroup({ me, onClose, onOpen }) {
+  const [name, setName] = useState('');
+  const [picked, setPicked] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const id = await createGroup(me.uid, name);
+      for (const uid of picked) await addToGroup(id, uid);
+      onOpen(id);
+    } catch (err) {
+      setError(err.code === 'permission-denied' ? "The group couldn't be started." : err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog title="New group" onClose={onClose}>
+      <form onSubmit={submit} className="group-form">
+        <label className="field">
+          Name, if you like
+          <input className="field__input" placeholder="Raid night" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <BuddyPicker me={me} except={[me.uid]} picked={picked} onChange={setPicked} />
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <Button type="submit" variant="primary" size="lg" loading={busy}>
+          Start the group
+        </Button>
+      </form>
+    </Dialog>
+  );
+}
+
+// Your Buddies, to tick: only Buddies can be brought into a group.
+function BuddyPicker({ me, except, picked, onChange }) {
+  const [buddies, setBuddies] = useState(null);
+  useEffect(() => {
+    let live = true;
+    getBuddies(me.uid).then((list) => live && setBuddies(list)).catch(() => live && setBuddies([]));
+    return () => {
+      live = false;
+    };
+  }, [me.uid]);
+  const choices = (buddies ?? []).filter((uid) => !except.includes(uid));
+  return (
+    <div className="buddy-pick" role="group" aria-label="Buddies">
+      {buddies === null && <p className="muted">Loading your Buddies…</p>}
+      {buddies !== null && choices.length === 0 && <p className="muted">No Buddies to add. Only Buddies can be in a group.</p>}
+      {choices.map((uid) => (
+        <BuddyChoice
+          key={uid}
+          uid={uid}
+          checked={picked.includes(uid)}
+          onToggle={() => onChange(picked.includes(uid) ? picked.filter((u) => u !== uid) : [...picked, uid])}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BuddyChoice({ uid, checked, onToggle }) {
+  const person = usePerson(uid);
+  return (
+    <label className="buddy-pick__row">
+      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <Avatar person={person} size={28} />
+      <span>{person.name}</span>
+      <span className="muted">@{person.username}</span>
+    </label>
+  );
+}
+
+// Who is in a group and its name; bringing a Buddy in; leaving; its maker
+// putting someone out.
+function GroupMembers({ convo, me, onClose, onLeft }) {
+  const maker = convo.createdBy === me.uid;
+  const [name, setName] = useState(convo.title || '');
+  const [adding, setAdding] = useState(false);
+  const [picked, setPicked] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const run = async (work) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await work();
+    } catch (err) {
+      setError(err.code === 'permission-denied' ? "That wasn't allowed." : err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const named = name.trim() !== (convo.title || '');
+
+  return (
+    <Dialog title="This group" onClose={onClose}>
+      <div className="group-form">
+        <form
+          className="group-form__name"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (named) run(() => renameGroup(convo.id, name));
+          }}
+        >
+          <label className="field">
+            Name
+            <input className="field__input" maxLength={80} value={name} placeholder="Group" onChange={(e) => setName(e.target.value)} />
+          </label>
+          <Button type="submit" size="sm" disabled={busy || !named}>
+            Save
+          </Button>
+        </form>
+        <ul className="members" aria-label="Members">
+          {convo.members.map((uid) => (
+            <MemberRow
+              key={uid}
+              uid={uid}
+              meUid={me.uid}
+              maker={convo.createdBy}
+              canRemove={maker && uid !== me.uid}
+              busy={busy}
+              onRemove={() => run(() => removeFromGroup(convo.id, uid))}
+            />
+          ))}
+        </ul>
+        {adding ? (
+          <>
+            <BuddyPicker me={me} except={convo.members} picked={picked} onChange={setPicked} />
+            <Button
+              size="sm"
+              variant="primary"
+              loading={busy}
+              disabled={!picked.length}
+              onClick={() => run(async () => {
+                for (const uid of picked) await addToGroup(convo.id, uid);
+                setPicked([]);
+                setAdding(false);
+              })}
+            >
+              Add {picked.length ? `${picked.length} ` : ''}to the group
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" onClick={() => setAdding(true)} disabled={convo.members.length >= 50}>
+            Add a Buddy
+          </Button>
+        )}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => window.confirm('Leave this group?') && run(async () => {
+            await leaveGroup(convo.id, me.uid);
+            onLeft();
+          })}
+        >
+          Leave the group
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function MemberRow({ uid, meUid, maker, canRemove, busy, onRemove }) {
+  const person = usePerson(uid);
+  return (
+    <li className="members__row">
+      <Link to={`/people/${uid}`} className="members__who">
+        <Avatar person={person} size={28} />
+        <span>{uid === meUid ? 'You' : person.name}</span>
+        <span className="muted">@{person.username}</span>
+      </Link>
+      {uid === maker && <span className="muted">made it</span>}
+      {canRemove && (
+        <Button size="sm" variant="ghost" disabled={busy} onClick={onRemove}>
+          Remove
+        </Button>
+      )}
+    </li>
   );
 }

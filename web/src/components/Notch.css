@@ -324,3 +324,80 @@
     display: none;
   }
 }
+
+/* Folders for the Hubs: a folder opens to show its Hubs in line after it;
+   a right-click on a Hub moves it, on a folder renames it. */
+.notch__folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notch__folder-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.notch__folder-name:hover {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.notch__folder.is-open .notch__folder-name {
+  border-style: dashed;
+}
+
+.notch__folder-count {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.notch__folder.is-open::after {
+  content: '';
+  width: 1px;
+  height: 22px;
+  background: var(--border-2);
+}
+
+.notch__menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  max-width: 240px;
+  padding: 6px;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  background: #141416;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.notch__menu-title {
+  padding: 4px 10px 2px;
+  color: var(--text-3);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notch__menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notch__menu-form .field__input {
+  height: 32px;
+}

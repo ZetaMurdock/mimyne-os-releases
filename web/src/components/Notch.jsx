@@ -4,7 +4,8 @@ import { Avatar, HubIcon } from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import Menu, { MenuItem } from './Menu.jsx';
 import NotificationBell from './NotificationBell.jsx';
-import { getHubCard, getHubCards } from '../data/api.js';
+import { getHubCard, getHubCards, saveHubFolders, watchHubFolders } from '../data/api.js';
+import { addFolder, layoutHubs, moveHub, removeFolder, renameFolder } from '../lib/hubFolders.js';
 import { staffLevelOf } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
 import { useWebStatusPublisher } from '../data/status.js';
@@ -121,6 +122,56 @@ function Notch() {
   useWebStatusPublisher(user?.uid);
   useSquashGeometry(bar, title);
 
+  // Folders for the Hubs (lib/hubFolders.js): kept for the account, and
+  // open or closed as left on this device. Right-click a Hub to move it,
+  // a folder to rename it or take it apart.
+  const [folders, setFolders] = useState([]);
+  const [openFolders, setOpenFolders] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('mimyne.notchFolders') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [hubMenu, setHubMenu] = useState(null);
+  useEffect(() => {
+    if (!user) {
+      setFolders([]);
+      return undefined;
+    }
+    return watchHubFolders(user.uid, setFolders, () => {});
+  }, [user?.uid]);
+  const saveFolders = (next) => {
+    setFolders(next);
+    if (user) saveHubFolders(user.uid, next).catch(() => {});
+  };
+  const toggleFolder = (id) =>
+    setOpenFolders((was) => {
+      const next = { ...was, [id]: !was[id] };
+      try {
+        localStorage.setItem('mimyne.notchFolders', JSON.stringify(next));
+      } catch {
+        // Not remembered: fine.
+      }
+      return next;
+    });
+  const laid = layoutHubs(folders, hubs);
+  const hubLink = (hub, folderId) => (
+    <NavLink
+      key={hub.id}
+      to={`/h/${hub.id}`}
+      className="notch__hub"
+      aria-label={hub.name}
+      title={hub.name}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setHubMenu({ hubId: hub.id, folderId, x: e.clientX, y: e.clientY });
+      }}
+    >
+      <HubIcon hub={hub} size={32} />
+    </NavLink>
+  );
+
   const { pathname, search } = useLocation();
   const onBuddies = pathname === '/feed' && new URLSearchParams(search).get('f') === 'buddies';
   const pledgedKey = [...pledged].sort().join(',');
@@ -186,11 +237,27 @@ function Notch() {
             <Icon name="chevronDown" size={14} strokeWidth={2.2} className="notch__fold-chev" />
           </button>
           {!folded &&
-            hubs.map((hub) => (
-              <NavLink key={hub.id} to={`/h/${hub.id}`} className="notch__hub" aria-label={hub.name} title={hub.name}>
-                <HubIcon hub={hub} size={32} />
-              </NavLink>
+            laid.folders.map((f) => (
+              <span key={f.id} className={`notch__folder ${openFolders[f.id] ? 'is-open' : ''}`}>
+                <button
+                  type="button"
+                  className="notch__folder-name"
+                  onClick={() => toggleFolder(f.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setHubMenu({ folderId: f.id, x: e.clientX, y: e.clientY });
+                  }}
+                  aria-expanded={!!openFolders[f.id]}
+                  title={`${f.name}: ${f.cards.length} ${f.cards.length === 1 ? 'Hub' : 'Hubs'}. Right-click to rename.`}
+                >
+                  <Icon name="folder" size={14} strokeWidth={2} />
+                  <span>{f.name}</span>
+                  {!openFolders[f.id] && <span className="notch__folder-count">{f.cards.length}</span>}
+                </button>
+                {openFolders[f.id] && f.cards.map((hub) => hubLink(hub, f.id))}
+              </span>
             ))}
+          {!folded && laid.loose.map((hub) => hubLink(hub, null))}
           {!folded && (
             <Link to="/hubs/new" className="notch__add" aria-label="Start a Hub" title="Start a Hub">
               <Icon name="plus" size={14} strokeWidth={2.2} />
@@ -224,6 +291,7 @@ function Notch() {
         >
           <MenuItem as={Link} to={`/u/${encodeURIComponent(user.username)}`}>Your profile</MenuItem>
           <MenuItem as={Link} to="/hubs/new">Start a Hub</MenuItem>
+          <MenuItem onClick={() => saveFolders(addFolder(folders, 'New folder'))} disabled={folders.length >= 30}>New Hub folder</MenuItem>
           <MenuItem as={Link} to="/pricing">Plans and pricing</MenuItem>
           <MenuItem as={Link} to="/settings/security">Security</MenuItem>
           <MenuItem as={Link} to="/settings/support">Your support</MenuItem>
@@ -246,6 +314,106 @@ function Notch() {
           <MenuItem as="a" href="/terms.html">Terms of Service</MenuItem>
         </Menu>
       </div>
+      {hubMenu && (
+        <HubFolderMenu
+          menu={hubMenu}
+          folders={folders}
+          onClose={() => setHubMenu(null)}
+          onSave={(next) => saveFolders(next)}
+        />
+      )}
     </nav>
+  );
+}
+
+// The small menu a right-click opens: on a Hub, where to move it; on a
+// folder, its name, or taking it apart (its Hubs come back out).
+function HubFolderMenu({ menu, folders, onClose, onSave }) {
+  const root = useRef(null);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  useEffect(() => {
+    const away = (e) => root.current && !root.current.contains(e.target) && onClose();
+    const key = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', key);
+    };
+  }, [onClose]);
+  const folder = menu.folderId ? folders.find((f) => f.id === menu.folderId) : null;
+  const style = { left: Math.max(8, Math.min(menu.x, window.innerWidth - 240)), top: menu.y + 4 };
+  const pick = (next) => {
+    onSave(next);
+    onClose();
+  };
+
+  if (menu.hubId) {
+    return (
+      <div className="notch__menu" role="menu" ref={root} style={style}>
+        {naming ? (
+          <form
+            className="notch__menu-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (name.trim()) pick(addFolder(folders, name, [menu.hubId]));
+            }}
+          >
+            <input className="field__input" autoFocus placeholder="Folder name" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} aria-label="Folder name" />
+            <button type="submit" className="menu__item" disabled={!name.trim()}>Make the folder</button>
+          </form>
+        ) : (
+          <>
+            <p className="notch__menu-title">Move to</p>
+            {folders.filter((f) => f.id !== menu.folderId).map((f) => (
+              <button key={f.id} type="button" className="menu__item" onClick={() => pick(moveHub(folders, menu.hubId, f.id))}>
+                {f.name}
+              </button>
+            ))}
+            {folders.length < 30 && (
+              <button type="button" className="menu__item" onClick={() => setNaming(true)}>New folder…</button>
+            )}
+            {menu.folderId && (
+              <button type="button" className="menu__item" onClick={() => pick(moveHub(folders, menu.hubId, null))}>
+                Out of {folder?.name ?? 'its folder'}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="notch__menu" role="menu" ref={root} style={style}>
+      {naming ? (
+        <form
+          className="notch__menu-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) pick(renameFolder(folders, menu.folderId, name));
+          }}
+        >
+          <input className="field__input" autoFocus maxLength={40} value={name} onChange={(e) => setName(e.target.value)} aria-label="Folder name" />
+          <button type="submit" className="menu__item" disabled={!name.trim()}>Rename</button>
+        </form>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="menu__item"
+            onClick={() => {
+              setName(folder?.name ?? '');
+              setNaming(true);
+            }}
+          >
+            Rename
+          </button>
+          <button type="button" className="menu__item" onClick={() => pick(removeFolder(folders, menu.folderId))}>
+            Take the folder apart
+          </button>
+        </>
+      )}
+    </div>
   );
 }

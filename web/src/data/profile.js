@@ -90,6 +90,25 @@ async function profileVotes(uid) {
 // ------------------------------------------------------------ right now
 
 /** What they're playing or listening to, live. Nothing when it's not for you. */
+/**
+ * The Discord someone put on their page, for "Call on Discord": the account
+ * id when their link carried it, else nothing to call. Null when the page
+ * can't be read (hidden from you) or has no Discord on it.
+ */
+export async function discordShowOf(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'profile_pages', uid));
+    const show = snap.exists() ? snap.data().discord : null;
+    if (!show || typeof show !== 'object') return null;
+    return {
+      id: typeof show.id === 'string' && /^\d{15,21}$/.test(show.id) ? show.id : null,
+      username: typeof show.username === 'string' ? show.username : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function watchPresence(uid, onChange) {
   return onSnapshot(
     doc(db, 'presence', uid),
