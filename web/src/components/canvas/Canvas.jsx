@@ -912,7 +912,7 @@ export default function Canvas({ nodes: liveNodes, edges, rights, uid, onWriting
                 </button>
                 <span className="cv-bar__rule" />
                 {COLORS.map((c) => (
-                  <button key={c} type="button" className={`cv-bar__swatch ${(selEdge.color ?? COLORS[0]) === c ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => editEdge(selEdge, { color: c === COLORS[0] ? null : c })} />
+                  <button key={c} type="button" className={`cv-bar__swatch ${(selEdge.color ?? COLORS[0]) === c ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Color ${c}`} onClick={() => editEdge(selEdge, { color: c === COLORS[0] ? null : c })} />
                 ))}
                 <span className="cv-bar__rule" />
                 <button type="button" className="cv-bar__btn cv-bar__btn--text" onClick={() => setLabeling(selEdge)}>Label</button>
@@ -926,7 +926,7 @@ export default function Canvas({ nodes: liveNodes, edges, rights, uid, onWriting
           ) : (
             <>
               {COLORS.map((c) => (
-                <button key={c} type="button" className={`cv-bar__swatch ${styleable.every((n) => (n.style.color ?? COLORS[0]) === c) ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => restyle({ color: c === COLORS[0] ? undefined : c })} />
+                <button key={c} type="button" className={`cv-bar__swatch ${styleable.every((n) => (n.style.color ?? COLORS[0]) === c) ? 'is-on' : ''}`} style={{ background: c }} aria-label={`Color ${c}`} onClick={() => restyle({ color: c === COLORS[0] ? undefined : c })} />
               ))}
               {single?.type === 'shape' && canModify(single) && (
                 <>
