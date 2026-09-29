@@ -746,7 +746,7 @@ export function setPinned(convoId, messageId, pinned) {
  * (profileUid), and optionally the message it answers.
  */
 export async function sendMessage(convoId, uid, { text: words, files, post, profileUid, replyTo }) {
-  await addDoc(collection(db, 'conversations', convoId, 'messages'), withoutEmpty({
+  const sent = await addDoc(collection(db, 'conversations', convoId, 'messages'), withoutEmpty({
     from: uid,
     text: words?.trim(),
     files,
@@ -760,6 +760,7 @@ export async function sendMessage(convoId, uid, { text: words, files, post, prof
     || (files?.length ? `Sent ${files.length === 1 ? files[0].name : `${files.length} files`}` : '')
     || (post ? 'Shared a post' : profileUid ? 'Shared a profile' : '');
   await updateDoc(doc(db, 'conversations', convoId), { lastAt: serverTimestamp(), lastFrom: uid, lastText: preview.slice(0, 200) });
+  return sent.id;
 }
 
 export function editMessage(convoId, messageId, words) {

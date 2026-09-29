@@ -7,8 +7,10 @@ import {
   collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
+import { mentionsIn } from '../lib/messageFormat.js';
+import { lookupUsername } from './identity.js';
 
-export const NOTICE_TYPES = ['view', 'like', 'comment', 'friend_request', 'friend_accept', 'stalk', 'invite'];
+export const NOTICE_TYPES = ['view', 'like', 'comment', 'friend_request', 'friend_accept', 'stalk', 'invite', 'mention'];
 const INBOX_LIMIT = 50;
 
 const inbox = (uid) => collection(db, 'notifications', uid, 'items');
@@ -35,6 +37,10 @@ export function cleanNotice(id, data) {
     postId: text(data.postId, 128) || null,
     commentId: text(data.commentId, 128) || null,
     parentId: text(data.parentId, 128) || null,
+    // A mention: the chat (convoId) or the Hub's Room (hubId, roomId), and the message.
+    convoId: text(data.convoId, 300) || null,
+    roomId: text(data.roomId, 64) || null,
+    messageId: text(data.messageId, 128) || null,
     vote: data.vote === 'down' ? 'down' : data.vote === 'up' ? 'up' : null,
     text: text(data.text, 4000),
   };
@@ -70,6 +76,8 @@ export function describeNotice(notice) {
       return 'is stalking you';
     case 'invite':
       return `invited you to ${quote(notice.workspaceName || 'a workspace', 60)}`;
+    case 'mention':
+      return `mentioned you: "${quote(notice.text)}"`;
     default:
       return '';
   }
@@ -77,6 +85,10 @@ export function describeNotice(notice) {
 
 /** Where opening a notice goes on the site. */
 export function noticeLink(notice) {
+  if (notice.type === 'mention') {
+    if (notice.convoId) return `/messages/${notice.convoId}`;
+    if (notice.hubId && notice.roomId) return `/h/${notice.hubId}?tab=rooms&room=${notice.roomId}`;
+  }
   const postId = notice.target === 'hub_post' || notice.target === 'profile_post' ? notice.targetId : notice.postId;
   if (postId && notice.hubId && notice.boardId) return `/h/${notice.hubId}/b/${notice.boardId}/p/${postId}`;
   if (postId && notice.hubId) return `/h/${notice.hubId}/p/${postId}`;
@@ -130,6 +142,23 @@ export function notifyVote(me, { scope, postId, commentId, authorUid, vote }) {
     ? { hubId: scope.hubId, ...roomOf(scope), ...(onComment ? { postId } : {}) }
     : { ownerUid: scope.profileUid, ...(onComment ? { postId } : {}) };
   return send(me, authorUid, `like__${target}__${targetId}__${me}`, { type: 'like', target, targetId, ...where, vote });
+}
+
+/**
+ * Everyone a message mentions by @username, told so: in a chat (`convoId`,
+ * only its `members`) or a Hub's Room (`hubId`, `roomId`; the rules decide
+ * who there may hear of it). `text` is the message's words exactly as sent.
+ */
+export async function notifyMentions(me, { convoId, members, hubId, roomId, messageId, text: words }) {
+  const names = mentionsIn(words);
+  if (!names.length || !messageId) return;
+  const place = convoId ? { convoId } : { hubId, roomId };
+  const id = convoId ? `mention__c_${convoId}__${messageId}` : `mention__r_${hubId}__${roomId}__${messageId}`;
+  await Promise.all(names.map(async (name) => {
+    const uid = await lookupUsername(name).catch(() => null);
+    if (!uid || uid === me || (members && !members.includes(uid))) return;
+    await send(me, uid, id, { type: 'mention', ...place, messageId, text: words });
+  }));
 }
 
 /** A comment, told to the post's author, or a reply to the comment's author. */
