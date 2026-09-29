@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { Avatar, HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
@@ -18,10 +18,12 @@ import { toggledMarks } from '../lib/reactions.js';
 import { makeTypingStamper } from '../lib/typing.js';
 import { applyFormatKey } from '../lib/composer.js';
 import { plainText } from '../lib/messageFormat.js';
+import { MAX_PINS, MAX_WINDOW, PAGE, nearBottom, searchMessages, stepResult, windowFor } from '../lib/chatTools.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
-  addToGroup, clearTyping, createGroup, deleteMessage, editMessage, getBuddies, getHubCard, leaveGroup, markRead, openDirect,
-  refreshPreview, removeFromGroup, renameGroup, sendMessage, setMyReactions, stampTyping, watchConversations, watchMessages, watchTyping,
+  addToGroup, clearTyping, createGroup, deleteMessage, editMessage, getBuddies, getHubCard, getMessage, leaveGroup, markRead, messagesSince,
+  openDirect, refreshPreview, removeFromGroup, renameGroup, sendMessage, setMyReactions, setPinned, stampTyping, watchConversations,
+  watchMessages, watchTyping,
 } from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
 import { loadProfile, usePerson } from '../data/people.js';
@@ -227,6 +229,32 @@ function Conversation({ convo, me }) {
   const [members, setMembers] = useState(false);
   const [discord, setDiscord] = useState(null);
   const navigate = useNavigate();
+  // How far back the chat shows (lib/chatTools.js): a page at first, more
+  // on asking, or enough to reach a pin or a reply from further back.
+  const [count, setCount] = useState(PAGE);
+  // Search in this chat: the words, and which of what it found is in view.
+  const [finding, setFinding] = useState(false);
+  const [words, setWords] = useState('');
+  const [current, setCurrent] = useState(null);
+  const findInput = useRef(null);
+  // A message just jumped to, lit for a moment; one asked for that is not
+  // on screen yet, gone to once it is.
+  const [flash, setFlash] = useState(null);
+  const [want, setWant] = useState(null);
+  // At the bottom, new messages come into view; scrolled up to read, they
+  // wait behind a button instead of pulling the view down.
+  const stick = useRef(true);
+  const [atBottom, setAtBottom] = useState(true);
+  const [unseen, setUnseen] = useState(0);
+  // The pin bar goes back through the pins, newest first; pins from further
+  // back than the chat shows are read once each.
+  const [pinAt, setPinAt] = useState(0);
+  const [farPins, setFarPins] = useState({});
+  const askedPins = useRef(new Set());
+  // Who sent what is on screen, named for search (only while searching:
+  // a Hub's chat can have many people in it).
+  const senders = useMemo(() => [...new Set(messages.map((m) => m.from))].slice(0, 100), [messages]);
+  const names = useNames(finding ? senders : []);
   useEffect(() => {
     if (!convo.other) return undefined;
     let live = true;
@@ -236,15 +264,142 @@ function Conversation({ convo, me }) {
     };
   }, [convo.other]);
 
-  useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load.")), [convo.id]);
+  useEffect(() => watchMessages(convo.id, setMessages, () => setError("Messages couldn't load."), count), [convo.id, count]);
   useEffect(() => watchTyping(convo.id, setTyping), [convo.id]);
   useEffect(() => {
     stamper.current = makeTypingStamper({ stamp: () => stampTyping(convo.id, me.uid), clear: () => clearTyping(convo.id, me.uid) });
     return () => stamper.current?.stop();
   }, [convo.id, me.uid]);
+  // A new message at the end: into view when I am at the bottom or it is
+  // mine; otherwise counted on the "new messages" button. Older messages
+  // coming in above (a step back) leave the view where it is.
+  const last = messages[messages.length - 1];
   useEffect(() => {
-    end.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length]);
+    if (!last) return;
+    if (stick.current || last.from === me.uid) {
+      end.current?.scrollIntoView({ block: 'end' });
+      stick.current = true;
+      setUnseen(0);
+    } else {
+      setUnseen((n) => n + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [last?.id]);
+
+  function onScroll(event) {
+    const bottom = nearBottom(event.currentTarget);
+    stick.current = bottom;
+    setAtBottom(bottom);
+    if (bottom) setUnseen(0);
+  }
+
+  const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+
+  /** Bring a message on screen into view and light it; false when it is not on screen. */
+  function lightUp(id) {
+    const el = document.getElementById(`m-${id}`);
+    if (!el) return false;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setFlash(id);
+    return true;
+  }
+
+  /** Go to a message: on screen, or by showing enough of the chat to reach it. */
+  async function jumpTo(id) {
+    if (lightUp(id)) return;
+    setError(null);
+    try {
+      const since = await messagesSince(convo.id, id);
+      if (since === null) {
+        setError('That message was deleted.');
+        return;
+      }
+      const next = windowFor(since, count);
+      if (!next) {
+        setError('That message is too far back to show here.');
+        return;
+      }
+      setWant(id);
+      setCount(next);
+    } catch {
+      setError("Couldn't go back to that message.");
+    }
+  }
+  useEffect(() => {
+    if (!want || !byId.has(want)) return;
+    const id = want;
+    setWant(null);
+    requestAnimationFrame(() => lightUp(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byId, want]);
+  useEffect(() => {
+    if (!flash) return undefined;
+    const timer = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(timer);
+  }, [flash]);
+
+  // Search: what it finds among the messages on screen, newest first.
+  const found = useMemo(
+    () => (finding ? searchMessages(messages, words, (uid) => (uid === me.uid ? 'you' : names[uid] || '')) : []),
+    [finding, messages, words, names, me.uid],
+  );
+  const foundSet = useMemo(() => new Set(found), [found]);
+  useEffect(() => {
+    if (!finding) return;
+    const newest = found.length ? found[found.length - 1] : null;
+    setCurrent(newest);
+    if (newest) lightUp(newest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [words]);
+  function step(dir) {
+    const next = stepResult(found, current, dir);
+    if (!next) return;
+    setCurrent(next);
+    lightUp(next);
+  }
+  function openFind() {
+    setFinding(true);
+    requestAnimationFrame(() => findInput.current?.select());
+  }
+  function closeFind() {
+    setFinding(false);
+    setWords('');
+    setCurrent(null);
+  }
+  const moreBack = messages.length >= count && count < MAX_WINDOW;
+  const stepBack = () => setCount((c) => Math.min(c + PAGE, MAX_WINDOW));
+
+  // Pins: newest first, those from further back read once each; a pin
+  // whose message was deleted is left out.
+  const pins = convo.pins ?? [];
+  const pinned = new Set(pins);
+  useEffect(() => {
+    for (const id of pins) {
+      if (byId.has(id) || askedPins.current.has(id)) continue;
+      askedPins.current.add(id);
+      getMessage(convo.id, id)
+        .then((m) => setFarPins((prev) => ({ ...prev, [id]: m })))
+        .catch(() => setFarPins((prev) => ({ ...prev, [id]: null })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pins.join('|'), byId]);
+  const pinOf = (id) => (byId.has(id) ? byId.get(id) : farPins[id]);
+  const shownPins = [...pins].reverse().filter((id) => pinOf(id) !== null);
+  const barPin = shownPins.length ? shownPins[pinAt % shownPins.length] : null;
+
+  async function togglePin(message) {
+    const on = !pinned.has(message.id);
+    if (on && pins.length >= MAX_PINS) {
+      setError(`A chat keeps ${MAX_PINS} pins at most. Unpin one first.`);
+      return;
+    }
+    setError(null);
+    try {
+      await setPinned(convo.id, message.id, on);
+    } catch (err) {
+      setError(err.code === 'permission-denied' && convo.kind === 'hub' ? "Only the Hub's mods pin in its chat." : "That pin didn't hold.");
+    }
+  }
 
   function addFiles(list) {
     const picked = [...list].map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`, file }));
@@ -319,6 +474,7 @@ function Conversation({ convo, me }) {
     try {
       await deleteMessage(convo.id, message.id);
       if (messages[messages.length - 1]?.id === message.id) await refreshPreview(convo.id, 'Deleted a message').catch(() => {});
+      if (pinned.has(message.id)) await setPinned(convo.id, message.id, false).catch(() => {});
     } catch {
       setError("That message couldn't be deleted.");
     }
@@ -334,13 +490,19 @@ function Conversation({ convo, me }) {
   }
 
   const sharedFiles = messages.flatMap((m) => m.files);
-  const byId = new Map(messages.map((m) => [m.id, m]));
 
   return (
     <>
       <section
         className={`inbox__thread${dragging ? ' is-dragging' : ''}`}
         aria-label={`Conversation with ${title}`}
+        // Ctrl+F searches this chat, as in Discord.
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            openFind();
+          }
+        }}
         // Files dropped anywhere on the conversation go along with the next message, as in a Room.
         onDragOver={(e) => {
           if (![...e.dataTransfer.types].includes('Files')) return;
@@ -379,13 +541,80 @@ function Conversation({ convo, me }) {
           {/* Discord gives no way for another app to start a call, so the nearest
               thing: their profile opens in Discord, where the call button is. */}
           {discord?.id && <CallOnDiscord id={discord.id} name={title} />}
+          <Button
+            variant="ghost"
+            icon="search"
+            iconOnly
+            aria-label="Search this chat"
+            title="Search this chat (Ctrl+F)"
+            selected={finding}
+            onClick={() => (finding ? closeFind() : openFind())}
+          />
           {convo.kind === 'group' && (
             <Button variant="ghost" icon="users" iconOnly aria-label="Members" title="Members" onClick={() => setMembers(true)} />
           )}
         </header>
 
-        <div className="inbox__messages">
+        {finding && (
+          <div className="inbox__find" role="search">
+            <Icon name="search" size={14} />
+            <input
+              ref={findInput}
+              className="inbox__find-input"
+              autoFocus
+              placeholder="Search this chat"
+              aria-label="Search this chat"
+              value={words}
+              onChange={(e) => setWords(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  step(e.shiftKey ? 1 : -1);
+                }
+                if (e.key === 'Escape') closeFind();
+              }}
+            />
+            <span className="inbox__find-count muted" aria-live="polite">
+              {words.trim() ? (found.length ? `${found.length - Math.max(found.indexOf(current), 0)} of ${found.length}` : 'Nothing found') : ''}
+            </span>
+            <Button variant="ghost" size="sm" icon="chevronUp" iconOnly aria-label="Older" title="Older (Enter)" disabled={!found.length} onClick={() => step(-1)} />
+            <Button variant="ghost" size="sm" icon="chevronDown" iconOnly aria-label="Newer" title="Newer (Shift+Enter)" disabled={!found.length} onClick={() => step(1)} />
+            {moreBack && (
+              <Button variant="ghost" size="sm" onClick={stepBack} title={`Searching the last ${messages.length} messages`}>
+                Look further back
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" icon="close" iconOnly aria-label="Close search" onClick={closeFind} />
+          </div>
+        )}
+
+        {barPin && (
+          <button
+            type="button"
+            className="inbox__pinbar"
+            title="Go to this message"
+            onClick={() => {
+              jumpTo(barPin);
+              setPinAt((i) => (i + 1) % shownPins.length);
+            }}
+          >
+            <Icon name="pin" size={14} />
+            <span className="inbox__pinbar-text">
+              <span className="inbox__pinbar-label">
+                Pinned{shownPins.length > 1 ? ` ${(pinAt % shownPins.length) + 1} of ${shownPins.length}` : ''}
+              </span>
+              <span className="inbox__pinbar-words">{pinLine(pinOf(barPin))}</span>
+            </span>
+          </button>
+        )}
+
+        <div className="inbox__messages" onScroll={onScroll}>
           {messages.length === 0 && <p className="muted inbox__none">Say hi.</p>}
+          {moreBack && (
+            <button type="button" className="inbox__older" onClick={stepBack}>
+              Show older messages
+            </button>
+          )}
           {messages.map((m) => (
             <Message
               key={m.id}
@@ -395,6 +624,11 @@ function Conversation({ convo, me }) {
               group={convo.kind !== 'direct'}
               answered={m.replyTo ? byId.get(m.replyTo.id) : null}
               editing={editing === m.id}
+              pinned={pinned.has(m.id)}
+              lit={flash === m.id || current === m.id}
+              found={foundSet.has(m.id)}
+              onPin={() => togglePin(m)}
+              onJump={jumpTo}
               onReply={() => {
                 setReplyTo(m);
                 input.current?.focus();
@@ -414,6 +648,20 @@ function Conversation({ convo, me }) {
             <p className="msg__seen muted">Seen</p>
           )}
           <div ref={end} />
+          {!atBottom && (
+            <div className="inbox__latest-wrap">
+              <button
+                type="button"
+                className="inbox__latest"
+                onClick={() => {
+                  stick.current = true;
+                  end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+                }}
+              >
+                {unseen ? `${unseen} new ${unseen === 1 ? 'message' : 'messages'}` : 'Jump to the latest'}
+              </button>
+            </div>
+          )}
         </div>
 
         <TypingLine stamps={typing} meUid={me.uid} />
@@ -496,6 +744,13 @@ function Conversation({ convo, me }) {
           )}
         </div>
         <section className="inbox__side-block">
+          <h2 className="label">Pinned</h2>
+          {shownPins.length === 0 && <p className="muted">Nothing pinned. Pin a message from its tools.</p>}
+          {shownPins.map((id) => (
+            <PinRow key={id} message={pinOf(id)} meUid={me.uid} onJump={() => jumpTo(id)} onUnpin={() => setPinned(convo.id, id, false).catch(() => setError("That pin didn't come off."))} />
+          ))}
+        </section>
+        <section className="inbox__side-block">
           <h2 className="label">Files in this chat</h2>
           {sharedFiles.length === 0 && <p className="muted">None yet.</p>}
           {sharedFiles.map((f) => (
@@ -540,7 +795,28 @@ function Conversation({ convo, me }) {
 }
 
 const describeAttachment = (m) =>
-  m.files?.length ? `📎 ${m.files[0].name}` : m.post ? 'A shared post' : m.profileUid ? 'A shared profile' : '';
+  m.files?.length ? `File: ${m.files[0].name}` : m.post ? 'A shared post' : m.profileUid ? 'A shared profile' : '';
+
+/** A pinned message in a line: its words, or what it carries. */
+const pinLine = (m) => (m === undefined ? 'Loading...' : plainText(m.text) || describeAttachment(m) || 'A message');
+
+function PinRow({ message, meUid, onJump, onUnpin }) {
+  const author = usePerson(message && message.from !== meUid ? message.from : null);
+  return (
+    <div className="inbox__pin">
+      <button type="button" className="inbox__pin-go" onClick={onJump} title="Go to this message">
+        <span className="inbox__pin-who">
+          {message ? (message.from === meUid ? 'You' : author.name) : ''}
+          {message && <span className="muted"> {timeAgo(message.at)}</span>}
+        </span>
+        <span className="inbox__pin-words">{pinLine(message)}</span>
+      </button>
+      <button type="button" className="inbox__pin-off" aria-label="Unpin" title="Unpin" onClick={onUnpin}>
+        <Icon name="close" size={12} />
+      </button>
+    </div>
+  );
+}
 
 function ReplyBar({ message, mine, onCancel }) {
   const author = usePerson(mine ? null : message.from);
@@ -557,7 +833,10 @@ function ReplyBar({ message, mine, onCancel }) {
   );
 }
 
-function Message({ message, meUid, mine, group, answered, editing, onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport, onReact }) {
+function Message({
+  message, meUid, mine, group, answered, editing, pinned, lit, found,
+  onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport, onReact, onPin, onJump,
+}) {
   const author = usePerson(group && !mine ? message.from : null);
   const quoted = usePerson(message.replyTo && message.replyTo.from !== meUid ? message.replyTo.from : null);
   const [draft, setDraft] = useState(message.text);
@@ -570,13 +849,18 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
   }, [editing]);
 
   return (
-    <div className={`msg ${mine ? 'is-mine' : ''}`} id={`m-${message.id}`}>
+    <div className={`msg${mine ? ' is-mine' : ''}${found ? ' is-found' : ''}${lit ? ' is-lit' : ''}`} id={`m-${message.id}`}>
       {group && !mine && <span className="msg__author">{author.name}</span>}
+      {pinned && (
+        <span className="msg__pinned">
+          <Icon name="pin" size={11} /> Pinned
+        </span>
+      )}
       {message.replyTo && (
         <button
           type="button"
           className="msg__quote"
-          onClick={() => document.getElementById(`m-${message.replyTo.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+          onClick={() => onJump(message.replyTo.id)}
         >
           <Icon name="reply" size={12} />
           <span>
@@ -636,6 +920,9 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
           </button>
           <button type="button" aria-label="Forward" title="Forward" onClick={onForward}>
             <Icon name="forward" size={14} />
+          </button>
+          <button type="button" aria-label={pinned ? 'Unpin' : 'Pin'} title={pinned ? 'Unpin' : 'Pin for everyone here'} onClick={onPin}>
+            <Icon name="pin" size={14} />
           </button>
           {message.text && (
             <button type="button" aria-label="Copy text" title="Copy text" onClick={() => navigator.clipboard?.writeText(message.text).catch(() => {})}>
