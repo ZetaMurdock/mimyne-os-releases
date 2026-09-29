@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canSeePage, cleanHubLook, cleanPages, cleanPicture, hasBackdrop, visiblePages, withPage } from './hubLook.js';
+import { canSeePage, cleanHidden, cleanHubLook, cleanPages, cleanPicture, hasBackdrop, visiblePages, withHidden, withPage } from './hubLook.js';
 
 const LINK = 'https://files.mimyne.com/files/p-abc/banner.png';
 
@@ -62,5 +62,26 @@ describe("a Hub's look", () => {
     expect(pages).toEqual({});
     expect(withPage({}, 'shop', 'mods')).toEqual({});
     expect(cleanPages({ board: 'everyone', files: 'owner' })).toEqual({ files: 'owner' });
+  });
+
+  it('hides a page from named roles, never from the owner', () => {
+    const look = cleanHubLook({ pagesHidden: { board: ['crew', 'crew', 7], shop: ['x'] }, accent: '#E11D48' });
+    expect(look.pagesHidden).toEqual({ board: ['crew'] });
+    expect(look.accent).toBe('#E11D48');
+    expect(cleanHubLook({ accent: 'pink' }).accent).toBeNull();
+    expect(canSeePage(look, 'board', 1, { role: 'crew' })).toBe(false);
+    expect(canSeePage(look, 'board', 1, { role: 'builder' })).toBe(true);
+    expect(canSeePage(look, 'board', 3, { role: 'crew', owner: true })).toBe(true);
+    expect(canSeePage(look, 'board', 0)).toBe(true);
+    expect(visiblePages(look, 1, { role: 'crew' }).map((p) => p.id)).not.toContain('board');
+  });
+
+  it('sets and tidies the hidden-from lists', () => {
+    let hidden = withHidden({}, 'files', ['u1', 'u2', 'u1']);
+    expect(hidden).toEqual({ files: ['u1', 'u2'] });
+    hidden = withHidden(hidden, 'files', []);
+    expect(hidden).toEqual({});
+    expect(withHidden({}, 'shop', ['u1'])).toEqual({});
+    expect(cleanHidden({ files: Array.from({ length: 30 }, (_, i) => `u${i}`) }, 20).files).toHaveLength(20);
   });
 });

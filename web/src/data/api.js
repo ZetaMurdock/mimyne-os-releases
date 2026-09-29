@@ -4,7 +4,7 @@
 import { plainText } from '../lib/messageFormat.js';
 import { cleanReactions } from '../lib/reactions.js';
 import { cleanFolders } from '../lib/hubFolders.js';
-import { cleanHubLook, cleanPages } from '../lib/hubLook.js';
+import { cleanHidden, cleanHubLook, cleanPages } from '../lib/hubLook.js';
 import { cleanBoard } from '../lib/hubBoards.js';
 import {
   addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs,
@@ -57,9 +57,24 @@ export function updateHubLook(hubId, look) {
     bgPanelGap: Number.isFinite(look.bgPanelGap) ? look.bgPanelGap : 1.2,
     bgPanelLineColor: /^#[0-9A-Fa-f]{6}$/.test(look.bgPanelLineColor || '') ? look.bgPanelLineColor : '#000000',
     pages: cleanPages(look.pages),
+    pagesHidden: cleanHidden(look.pagesHidden),
+    accent: /^#[0-9A-Fa-f]{6}$/.test(look.accent || '') ? look.accent : deleteField(),
     updatedAt: serverTimestamp(),
   };
   return updateDoc(doc(db, 'hubs', hubId), patch);
+}
+
+/** The people each page is hidden from: the owner and mods read it, the rules enforce it. */
+export async function getHiddenPeople(hubId) {
+  try {
+    const snap = await getDoc(doc(db, 'hubs', hubId, 'settings', 'pages'));
+    return cleanHidden(snap.exists() ? snap.data().hidden : null, 200);
+  } catch {
+    return {};
+  }
+}
+export function saveHiddenPeople(hubId, hidden) {
+  return setDoc(doc(db, 'hubs', hubId, 'settings', 'pages'), { hidden: cleanHidden(hidden, 200), updatedAt: serverTimestamp() });
 }
 
 export function cleanFiles(files) {
