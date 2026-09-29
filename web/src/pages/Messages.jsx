@@ -17,7 +17,7 @@ import TypingLine from '../components/TypingLine.jsx';
 import { toggledMarks } from '../lib/reactions.js';
 import { makeTypingStamper } from '../lib/typing.js';
 import { applyFormatKey } from '../lib/composer.js';
-import { plainText } from '../lib/messageFormat.js';
+import { mentionsIn, plainText } from '../lib/messageFormat.js';
 import { MAX_PINS, MAX_WINDOW, PAGE, nearBottom, searchMessages, stepResult, windowFor } from '../lib/chatTools.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
@@ -170,6 +170,24 @@ function useNames(uids) {
   return names;
 }
 
+/** Some people's usernames and names, read once each (data/people.js): who can be mentioned. */
+function usePeople(uids) {
+  const [people, setPeople] = useState([]);
+  const key = uids.join(',');
+  useEffect(() => {
+    let live = true;
+    Promise.all(uids.map((uid) => loadProfile(uid)
+      .then((p) => (p?.username ? { uid, username: p.username, name: p.displayName || p.username } : null))
+      .catch(() => null)))
+      .then((list) => live && setPeople(list.filter(Boolean)));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return people;
+}
+
 /** What a conversation is called, and its picture. A group with no name is called by who is in it. */
 function useTitle(convo, meUid) {
   const person = usePerson(convo.other);
@@ -256,6 +274,18 @@ function Conversation({ convo, me }) {
   // a Hub's chat can have many people in it).
   const senders = useMemo(() => [...new Set(messages.map((m) => m.from))].slice(0, 100), [messages]);
   const names = useNames(finding ? senders : []);
+  // @someone in a group or a Hub's chat: its people (in a Hub's chat, those
+  // who have spoken on screen) whose names start with what is typed, as in
+  // a Room. Picked with the arrows and Enter or Tab.
+  const [mention, setMention] = useState(null); // { query, start, pick }
+  const mentionable = convo.kind === 'direct' ? [] : (convo.kind === 'group' ? convo.members : senders).filter((uid) => uid !== me.uid);
+  const people = usePeople(mention ? mentionable : []);
+  const suggestions = useMemo(() => {
+    if (!mention) return [];
+    const q = mention.query.toLowerCase();
+    return people.filter((p) => p.username.toLowerCase().startsWith(q) || p.name.toLowerCase().startsWith(q)).slice(0, 8);
+  }, [mention, people]);
+  const myName = me.username?.toLowerCase() ?? null;
   useEffect(() => {
     if (!convo.other) return undefined;
     let live = true;
@@ -435,6 +465,16 @@ function Conversation({ convo, me }) {
       setSending(false);
       setProgress({});
     }
+  }
+
+  function pickMention(person) {
+    const before = text.slice(0, mention.start);
+    const after = text.slice(mention.start + 1 + mention.query.length);
+    const value = `${before}@${person.username} ${after.replace(/^\s/, '')}`;
+    setText(value);
+    saveDraft(convo.id, value);
+    setMention(null);
+    requestAnimationFrame(() => placeCaret(input.current, before.length + person.username.length + 2));
   }
 
   function addEmoji(char) {
@@ -630,6 +670,7 @@ function Conversation({ convo, me }) {
               editing={editing === m.id}
               pinned={pinned.has(m.id)}
               lit={flash === m.id || current === m.id}
+              mentionsMe={!!myName && m.from !== me.uid && mentionsIn(m.text).includes(myName)}
               found={foundSet.has(m.id)}
               onPin={() => togglePin(m)}
               onJump={jumpTo}
@@ -686,6 +727,13 @@ function Conversation({ convo, me }) {
             </div>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
+          {mention && suggestions.length > 0 && (
+            <ul className="inbox__mentions" role="listbox" aria-label="People to mention">
+              {suggestions.map((p, i) => (
+                <MentionOption key={p.uid} person={p} active={i === mention.pick} onPick={() => pickMention(p)} />
+              ))}
+            </ul>
+          )}
           <div className="inbox__field">
             <input
               ref={fileInput}
@@ -709,10 +757,34 @@ function Conversation({ convo, me }) {
               placeholder={`Message ${title}. Any file, any size.`}
               maxLength={4000}
               value={text}
-              onChange={(e) => { setText(e.target.value); saveDraft(convo.id, e.target.value); stamper.current?.typed(e.target.value); }}
+              onChange={(e) => {
+                setText(e.target.value);
+                saveDraft(convo.id, e.target.value);
+                stamper.current?.typed(e.target.value);
+                const upto = e.target.value.slice(0, e.target.selectionStart);
+                const match = convo.kind === 'direct' ? null : upto.match(/(^|\s)@([A-Za-z0-9_]{0,20})$/);
+                setMention(match ? { query: match[2], start: upto.length - match[2].length - 1, pick: 0 } : null);
+              }}
               onInput={(e) => { e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 200)}px`; }}
               onKeyDown={(e) => {
                 if (applyFormatKey(e, e.currentTarget, setText)) { e.preventDefault(); return; }
+                if (mention && suggestions.length) {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const by = e.key === 'ArrowDown' ? 1 : -1;
+                    setMention((m) => ({ ...m, pick: (m.pick + by + suggestions.length) % suggestions.length }));
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    pickMention(suggestions[mention.pick] ?? suggestions[0]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    setMention(null);
+                    return;
+                  }
+                }
                 if (e.key === 'Escape' && replyTo) setReplyTo(null);
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
@@ -724,6 +796,7 @@ function Conversation({ convo, me }) {
                   if (last) { e.preventDefault(); setEditing(last.id); }
                 }
               }}
+              onBlur={() => setMention(null)}
               // Pictures and GIFs pasted straight in go along as files.
               onPaste={(e) => {
                 if (e.clipboardData.files.length) {
@@ -801,6 +874,25 @@ function Conversation({ convo, me }) {
 const describeAttachment = (m) =>
   m.files?.length ? `File: ${m.files[0].name}` : m.post ? 'A shared post' : m.profileUid ? 'A shared profile' : '';
 
+function MentionOption({ person, active, onPick }) {
+  const face = usePerson(person.uid, person.name);
+  return (
+    <li
+      role="option"
+      aria-selected={active}
+      className={`inbox__mention${active ? ' is-active' : ''}`}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onPick();
+      }}
+    >
+      <Avatar person={face} size={22} />
+      <span>{person.name}</span>
+      <span className="muted">@{person.username}</span>
+    </li>
+  );
+}
+
 /** A pinned message in a line: its words, or what it carries. */
 const pinLine = (m) => (m === undefined ? 'Loading...' : plainText(m.text) || describeAttachment(m) || 'A message');
 
@@ -838,7 +930,7 @@ function ReplyBar({ message, mine, onCancel }) {
 }
 
 function Message({
-  message, meUid, mine, group, answered, editing, pinned, lit, found,
+  message, meUid, mine, group, answered, editing, pinned, lit, found, mentionsMe,
   onReply, onEdit, onSaveEdit, onCancelEdit, onDelete, onForward, onReport, onReact, onPin, onJump,
 }) {
   const author = usePerson(group && !mine ? message.from : null);
@@ -853,7 +945,7 @@ function Message({
   }, [editing]);
 
   return (
-    <div className={`msg${mine ? ' is-mine' : ''}${found ? ' is-found' : ''}${lit ? ' is-lit' : ''}`} id={`m-${message.id}`}>
+    <div className={`msg${mine ? ' is-mine' : ''}${mentionsMe ? ' is-mention' : ''}${found ? ' is-found' : ''}${lit ? ' is-lit' : ''}`} id={`m-${message.id}`}>
       {group && !mine && <span className="msg__author">{author.name}</span>}
       {pinned && (
         <span className="msg__pinned">
@@ -904,6 +996,7 @@ function Message({
             text={message.text}
             className="msg__bubble"
             preview={(url) => <LinkPreview key={url} url={url} />}
+            mention={(name) => <Link className="fmt__mention" to={`/u/${name}`}>@{name}</Link>}
             after={message.edited && <span className="msg__edited"> (edited)</span>}
           />
         )
