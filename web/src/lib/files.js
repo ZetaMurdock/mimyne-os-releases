@@ -58,6 +58,15 @@ function put(url, body, bearer, onProgress) {
  * uploaded `public` (a profile banner or background) is for anyone with the
  * link, for good: the label also carries that `url`.
  */
+/**
+ * Asks the file service to count a Hub's members again (hub_stats/<hub>,
+ * files-worker/src/hubStats.js), after a pledge, a leave or a removal. It
+ * counts at most every 30 seconds; nothing waits on it.
+ */
+export function recountHub(hubId) {
+  return callJson(`/hubs/${encodeURIComponent(hubId)}/stats`, {});
+}
+
 export async function uploadFile(file, onProgress = () => {}, { public: open = false } = {}) {
   const type = file.type || 'application/octet-stream';
   const start = await callJson('/uploads', { name: file.name, size: file.size, type, ...(open ? { public: true } : {}) });
