@@ -15,6 +15,10 @@
    sit over it. */
 .hub--backdrop {
   position: relative;
+  /* Its own stacking context, so the backdrop (z-index -1) sits just under
+     the page and never under whatever holds the page - the app's social
+     layer paints its own background there. */
+  isolation: isolate;
 }
 
 .hub__backdrop {
@@ -54,7 +58,11 @@
   padding-top: 72px;
 }
 
+/* Over the banner: the banner is positioned, so without this it would be
+   drawn over the top of the icon that overlaps it. */
 .hub__identity {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
   gap: 20px;

@@ -424,7 +424,32 @@ function Conversation({ convo, me }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (sending || (!text.trim() && !files.length)) return;
+    if (!text.trim() && !files.length) return;
+    const reply = replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null;
+    // Words alone go at once, the way chat apps send them: the box is free
+    // for the next message straight away, and the words come back to it
+    // only if they could not be sent. (Enter while the last message was
+    // still on its way used to do nothing, and what was typed meanwhile was
+    // wiped when it landed.)
+    if (!files.length) {
+      const words = text;
+      setText('');
+      saveDraft(convo.id, '');
+      stamper.current?.stop();
+      if (input.current) input.current.style.height = 'auto';
+      setReplyTo(null);
+      setError(null);
+      try {
+        const messageId = await sendMessage(convo.id, me.uid, { text: words, files: [], replyTo: reply });
+        if (convo.kind !== 'direct') notifyMentions(me.uid, { convoId: convo.id, members: convo.members, messageId, text: words.trim() }).catch(() => {});
+      } catch (err) {
+        setText((now) => now || words);
+        setError(err.code === 'permission-denied' ? "This message couldn't be sent." : err.message);
+      }
+      return;
+    }
+    // Files go up one batch at a time, with their progress shown.
+    if (sending) return;
     setSending(true);
     setError(null);
     try {
@@ -433,7 +458,7 @@ function Conversation({ convo, me }) {
       const messageId = await sendMessage(convo.id, me.uid, {
         text,
         files: labels,
-        replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null,
+        replyTo: reply,
       });
       // @someone in a group or a Hub's chat hears of it (in a direct chat
       // the message itself is the notice).

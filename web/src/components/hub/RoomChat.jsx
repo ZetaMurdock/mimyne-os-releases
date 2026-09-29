@@ -123,7 +123,28 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
 
   async function submit(event) {
     event?.preventDefault();
-    if (sending || (!text.trim() && !files.length)) return;
+    if (!text.trim() && !files.length) return;
+    // Words alone go at once (as in direct messages): the box is free for
+    // the next message straight away, and the words come back only if they
+    // could not be sent.
+    if (!files.length) {
+      const words = text;
+      const reply = replyLabel(replyTo);
+      setText('');
+      stamper.current?.stop();
+      setReplyTo(null);
+      setError(null);
+      stick.current = true;
+      try {
+        const sent = await sendRoomMessage(hub.id, room.id, user.uid, { text: words, files: [], replyTo: reply });
+        notifyMentions(user.uid, { hubId: hub.id, roomId: room.id, messageId: sent.id, text: words.trim() }).catch(() => {});
+      } catch (err) {
+        setText((now) => now || words);
+        setError(err.code === 'permission-denied' ? "This message couldn't be sent here." : err.message);
+      }
+      return;
+    }
+    if (sending) return;
     setSending(true);
     setError(null);
     try {
