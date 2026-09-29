@@ -4,7 +4,8 @@ import { Avatar, HubIcon } from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import Menu, { MenuItem } from './Menu.jsx';
 import NotificationBell from './NotificationBell.jsx';
-import { getHubCard, getHubCards, saveHubFolders, watchHubFolders } from '../data/api.js';
+import { getHubCard, getHubCards, saveHubFolders, watchConversations, watchHubFolders } from '../data/api.js';
+import { seenMap, unreadCount } from '../lib/chatTools.js';
 import { addFolder, layoutHubs, moveHub, removeFolder, renameFolder } from '../lib/hubFolders.js';
 import { staffLevelOf } from '../data/reports.js';
 import { useSession } from '../data/session.jsx';
@@ -71,6 +72,30 @@ function useSquashGeometry(barRef, titleRef) {
     observer.observe(bar);
     return () => observer.disconnect();
   }, [barRef, titleRef]);
+}
+
+/** How many of your chats have something new, live (lib/chatTools.js). */
+function useUnreadChats(uid) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!uid) {
+      setCount(0);
+      return undefined;
+    }
+    return watchConversations(uid, (list) => setCount(unreadCount(list, uid, seenMap())), () => setCount(0));
+  }, [uid]);
+  return count;
+}
+
+function MessagesLink({ uid }) {
+  const unread = useUnreadChats(uid);
+  const label = unread ? `Messages, ${unread} unread` : 'Messages';
+  return (
+    <NavLink to="/messages" className="notch__icon" aria-label={label} title={label}>
+      <Icon name="message" size={18} />
+      {unread > 0 && <span className="notch__count">{unread > 99 ? '99+' : unread}</span>}
+    </NavLink>
+  );
 }
 
 export default function NotchDock() {
@@ -268,9 +293,7 @@ function Notch() {
         <span className="notch__spacer" />
 
         <NotificationBell me={user} />
-        <NavLink to="/messages" className="notch__icon" aria-label="Messages">
-          <Icon name="message" size={18} />
-        </NavLink>
+        <MessagesLink uid={user?.uid} />
         <Link to="/feed" className={`notch__link ${pathname === '/feed' && !onBuddies ? 'active' : ''}`}>
           Feed
         </Link>

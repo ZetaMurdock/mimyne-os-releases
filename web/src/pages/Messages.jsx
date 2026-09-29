@@ -18,7 +18,9 @@ import { toggledMarks } from '../lib/reactions.js';
 import { makeTypingStamper } from '../lib/typing.js';
 import { applyFormatKey } from '../lib/composer.js';
 import { mentionsIn, plainText } from '../lib/messageFormat.js';
-import { MAX_PINS, MAX_WINDOW, PAGE, nearBottom, searchMessages, stepResult, windowFor } from '../lib/chatTools.js';
+import {
+  MAX_PINS, MAX_WINDOW, PAGE, isUnread, markSeen, nearBottom, searchMessages, seenMap, stepResult, windowFor,
+} from '../lib/chatTools.js';
 import { FileCard, PendingFile } from '../components/FileCard.jsx';
 import {
   addToGroup, clearTyping, createGroup, deleteMessage, editMessage, getBuddies, getHubCard, getMessage, leaveGroup, markRead, messagesSince,
@@ -39,23 +41,6 @@ export default function Messages() {
   const { user, status } = useSession();
   if (status === 'loading') return null;
   return user ? <Inbox me={user} /> : <NeedsAccount what="your messages" />;
-}
-
-// When each conversation was last opened on this device, for the unread dot.
-const SEEN_KEY = 'mimyne.seen';
-function seenMap() {
-  try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY)) ?? {};
-  } catch {
-    return {};
-  }
-}
-function markSeen(id) {
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify({ ...seenMap(), [id]: Date.now() }));
-  } catch {
-    // Storage blocked: the dot just stays.
-  }
 }
 
 // A message half written is kept on this device, per conversation, until
@@ -119,7 +104,7 @@ function Inbox({ me }) {
             active={c === active}
             // Unread: someone else's message since I last read (kept on the
             // conversation now, with this device's older memory as a fallback).
-            unread={!!c.lastFrom && c.lastFrom !== me.uid && c.at > Math.max(c.lastRead?.[me.uid] ?? 0, seenMap()[c.id] ?? 0) && c !== active}
+            unread={c !== active && isUnread(c, me.uid, seenMap()[c.id])}
           />
         ))}
       </nav>
