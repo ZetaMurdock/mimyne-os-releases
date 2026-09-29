@@ -48,6 +48,8 @@ export function watchRooms(hubId, onChange, onError) {
         access: cleanAccess(r.access),
         editedAt: r.editedAt ? millis(r.editedAt) : null,
         workspace: text(r.workspace, 128) || null,
+        // Its canvas in miniature, for its card (lib/roomPreview.js).
+        preview: typeof r.preview === 'string' ? r.preview.slice(0, 4000) : null,
         pending: d.metadata.hasPendingWrites && !r.createdAt?.toMillis,
         raw: r,
       };
@@ -96,7 +98,7 @@ export function updateRoom(hubId, room, changes) {
     workspace: 'workspace' in changes ? changes.workspace : room.workspace,
   });
   // What only the rules' own stamps may say stays exactly as it was.
-  const keep = Object.fromEntries(['createdBy', 'createdAt', 'editedAt'].filter((k) => room.raw?.[k] !== undefined).map((k) => [k, room.raw[k]]));
+  const keep = Object.fromEntries(['createdBy', 'createdAt', 'editedAt', 'preview'].filter((k) => room.raw?.[k] !== undefined).map((k) => [k, room.raw[k]]));
   return setDoc(doc(db, 'hubs', hubId, 'rooms', room.id), { ...fields, ...keep, updatedAt: serverTimestamp() });
 }
 
@@ -116,6 +118,16 @@ export function stampEdited(hubId, roomId) {
   if (Date.now() - (stamped.get(key) ?? 0) < 60_000) return;
   stamped.set(key, Date.now());
   updateDoc(doc(db, 'hubs', hubId, 'rooms', roomId), { editedAt: serverTimestamp() }).catch(() => {});
+}
+
+/**
+ * Keeps the Room's miniature (lib/roomPreview.js) for its card on the grid,
+ * with the edited stamp: the rules let whoever may add to the canvas change
+ * these two and nothing else.
+ */
+export function savePreview(hubId, roomId, preview) {
+  stamped.set(`${hubId}/${roomId}`, Date.now());
+  return updateDoc(doc(db, 'hubs', hubId, 'rooms', roomId), { editedAt: serverTimestamp(), preview }).catch(() => {});
 }
 
 /**

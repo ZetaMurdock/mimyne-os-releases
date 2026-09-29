@@ -6,9 +6,10 @@ import Icon from '../Icon.jsx';
 import Canvas from '../canvas/Canvas.jsx';
 import RoomChat from './RoomChat.jsx';
 import {
-  HERE_BEAT_MS, clearRoomWorkspace, createRoom, deleteRoom, leaveHere, levelIn, roomIdFor, roomName, roomRights, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
+  HERE_BEAT_MS, clearRoomWorkspace, createRoom, deleteRoom, leaveHere, levelIn, roomIdFor, roomName, roomRights, savePreview, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
 } from '../../data/rooms.js';
-import { watchCanvas, watchPreview } from '../../data/canvas.js';
+import { watchCanvas } from '../../data/canvas.js';
+import { boxesOf, previewOf, readPreview } from '../../lib/roomPreview.js';
 import { linkWorkspace, myAppWorkspaces, watchAppPreview, watchAppWorkspace } from '../../data/appWorkspaces.js';
 import { usePerson } from '../../data/people.js';
 import { watchStatusSettings } from '../../data/status.js';
@@ -195,7 +196,7 @@ function RoomTile({ hub, room, rights, roles, members, inside, signedIn, canMode
     <article className={`room-tile ${live ? 'is-live' : ''} ${rights.view ? '' : 'is-locked'}`}>
       <button type="button" className="room-tile__open" onClick={onOpen} aria-label={`Open ${room.name}`} disabled={!rights.view} />
       <div className="room-tile__front">
-        {rights.view ? (room.pending ? <span className="room-tile__blank">Setting up…</span> : room.workspace ? <AppPreview workspaceId={room.workspace} /> : <Preview hubId={hub.id} roomId={room.id} />) : (
+        {rights.view ? (room.pending ? <span className="room-tile__blank">Setting up…</span> : room.workspace ? <AppPreview workspaceId={room.workspace} /> : <Preview room={room} />) : (
           <span className="room-tile__lock"><Icon name="lock" size={14} /> {onlyLabel(room.access.view, roles)}</span>
         )}
         {live && <span className="room-tile__live">● LIVE</span>}
@@ -263,45 +264,41 @@ function Face({ uid, members }) {
   return <Avatar person={usePerson(uid, members.find((m) => m.uid === uid)?.name)} size={20} />;
 }
 
-/** The Room's front: its canvas in miniature. */
-function Preview({ hubId, roomId }) {
-  const [nodes, setNodes] = useState(null);
-  useEffect(() => watchPreview(hubId, roomId, setNodes), [hubId, roomId]);
-  return <Miniature nodes={nodes} />;
+/**
+ * The Room's front: its canvas in miniature, from the preview kept on the
+ * Room (lib/roomPreview.js), so the grid reads no notes at all. A Room nobody
+ * has edited since previews began shows a plain card until someone who may
+ * add to it opens it.
+ */
+function Preview({ room }) {
+  return <Miniature boxes={readPreview(room.preview)} />;
 }
 
 /** An app workspace's front: what its owner published, in miniature. */
 function AppPreview({ workspaceId }) {
   const [nodes, setNodes] = useState(null);
   useEffect(() => watchAppPreview(workspaceId, setNodes), [workspaceId]);
-  return <Miniature nodes={nodes} empty="Nothing published yet" />;
+  return <Miniature boxes={nodes && boxesOf(nodes)} empty="Nothing published yet" />;
 }
 
-function Miniature({ nodes, empty = 'Empty canvas' }) {
-  const shown = (nodes ?? []).filter((n) => !n.parentId);
-  if (!shown.length) return <span className="room-tile__blank">{nodes ? empty : ''}</span>;
-  const boxes = shown.map((n) => {
-    const w = n.style.width ?? (n.type === 'list' ? 272 : n.type === 'file' ? 280 : 220);
-    const cards = nodes.filter((c) => c.parentId === n.id).length;
-    const h = n.style.height ?? (n.type === 'list' ? 80 + cards * 44 : n.type === 'shape' ? 110 : 70);
-    return { n, x: n.x - w / 2, y: n.type === 'list' ? n.y - 24 : n.y - h / 2, w, h };
-  });
+function Miniature({ boxes, empty = 'Empty canvas' }) {
+  if (!boxes?.length) return <span className="room-tile__blank">{boxes ? empty : ''}</span>;
   const minX = Math.min(...boxes.map((b) => b.x)) - 60;
   const minY = Math.min(...boxes.map((b) => b.y)) - 60;
   const maxX = Math.max(...boxes.map((b) => b.x + b.w)) + 60;
   const maxY = Math.max(...boxes.map((b) => b.y + b.h)) + 60;
   return (
     <svg className="room-tile__preview" viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      {boxes.map(({ n, x, y, w, h }) => (
+      {boxes.map(({ x, y, w, h, kind, color }, i) => (
         <rect
-          key={n.id}
+          key={i}
           x={x}
           y={y}
           width={w}
           height={h}
-          rx={n.style.shape === 'ellipse' || n.style.shape === 'pill' ? Math.min(w, h) / 2 : 10}
-          fill={n.type === 'text' ? 'none' : n.style.color ? `${n.style.color}33` : '#1d1d22'}
-          stroke={n.type === 'text' ? 'none' : n.style.color ?? '#3a3a40'}
+          rx={kind === 'r' ? Math.min(w, h) / 2 : 10}
+          fill={kind === 't' ? 'none' : color ? `${color}33` : '#1d1d22'}
+          stroke={kind === 't' ? 'none' : color || '#3a3a40'}
           strokeWidth="1.5"
           vectorEffect="non-scaling-stroke"
         />
@@ -341,6 +338,28 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
     }
     return watchCanvas(hub.id, room.id, setNodes, setEdges, () => setError("This Room's canvas couldn't load."));
   }, [hub.id, room.id, ready, room.workspace, show.canvas]);
+  // Its miniature on the grid (lib/roomPreview.js), kept by whoever may add
+  // to the canvas: written once the canvas has been still for a while, and
+  // on the way out, and only when it looks different.
+  const pendingPreview = useRef(null);
+  const canKeepPreview = ready && rights.add && !room.workspace;
+  useEffect(() => {
+    if (!canKeepPreview || !nodes) return undefined;
+    const preview = previewOf(nodes);
+    if (preview === (room.preview ?? null)) {
+      pendingPreview.current = null;
+      return undefined;
+    }
+    pendingPreview.current = preview;
+    const timer = setTimeout(() => {
+      pendingPreview.current = null;
+      savePreview(hub.id, room.id, preview);
+    }, PREVIEW_STILL_MS);
+    return () => clearTimeout(timer);
+  }, [canKeepPreview, nodes, room.preview, hub.id, room.id]);
+  useEffect(() => () => {
+    if (pendingPreview.current) savePreview(hub.id, room.id, pendingPreview.current);
+  }, [hub.id, room.id]);
   // The newest message, for the dot on a folded chat. With the chat open it
   // is already on screen: a second listener would bill every message twice.
   useEffect(() => (ready && !show.chat ? watchLatest(hub.id, room.id, setLatest) : undefined), [hub.id, room.id, ready, show.chat]);
@@ -478,6 +497,9 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
     </section>
   );
 }
+
+// How long the canvas stays still before its miniature is kept.
+const PREVIEW_STILL_MS = 15_000;
 
 function readLayout() {
   try {
