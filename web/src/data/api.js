@@ -426,6 +426,7 @@ export async function listPosts(scope, count = 20) {
 }
 
 export async function createPost(scope, { me, title, body, files, embedHubId }) {
+  forgetFeed();
   const ref = await addDoc(postsOf(scope), withoutEmpty({
     authorUid: me.uid, authorName: me.username, title: title?.trim(), body: body?.trim(), files, embedHubId,
     createdAt: serverTimestamp(),
@@ -434,6 +435,7 @@ export async function createPost(scope, { me, title, body, files, embedHubId }) 
 }
 
 export function deletePost(post) {
+  forgetFeed();
   return deleteDoc(postRef(post.scope, post.id));
 }
 
@@ -542,6 +544,17 @@ export async function hubPosts(hubIds, count = 10) {
   return lists.flat().map((p) => ({ ...p, circle: 'hubs' }));
 }
 
+// The feed as last loaded, kept a few minutes: coming back to it (another
+// page and back, or the app's social screen closed and opened) shows it
+// again without the hundreds of reads a load costs. Posting or deleting a
+// post starts it afresh.
+const FEED_KEEP_MS = 3 * 60_000;
+let feedKept = null; // { uid, at, promise }
+
+export function forgetFeed() {
+  feedKept = null;
+}
+
 /**
  * The feed: your own posts, your buddies', their buddies', people you stalk,
  * the Hubs you pledged to, and what's popular on public Hubs, each tagged
@@ -550,7 +563,14 @@ export async function hubPosts(hubIds, count = 10) {
 export async function getFeed() {
   const user = await authReady;
   if (!user) return { posts: [], discover: [], buddies: [], hubs: [] };
-  const uid = user.uid;
+  if (feedKept?.uid === user.uid && Date.now() - feedKept.at < FEED_KEEP_MS) return feedKept.promise;
+  const promise = loadFeed(user.uid);
+  feedKept = { uid: user.uid, at: Date.now(), promise };
+  promise.catch(() => forgetFeed());
+  return promise;
+}
+
+async function loadFeed(uid) {
   const [pledged, buddies, stalking, publicHubs] = await Promise.all([
     myHubIds(uid),
     getBuddies(uid).catch(() => []),
