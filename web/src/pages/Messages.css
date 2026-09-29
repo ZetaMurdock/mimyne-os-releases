@@ -406,10 +406,13 @@
   position: relative;
 }
 
+/* The tools open toward the middle of the chat: from the left edge of
+   someone else's message, from the right edge of yours, so a short message
+   never pushes them past the side. */
 .msg__tools {
   position: absolute;
   top: -14px;
-  right: 0;
+  left: 0;
   display: flex;
   gap: 2px;
   padding: 2px;
@@ -422,8 +425,8 @@
 }
 
 .msg.is-mine .msg__tools {
-  right: auto;
-  left: 0;
+  right: 0;
+  left: auto;
 }
 
 .msg:hover .msg__tools,
