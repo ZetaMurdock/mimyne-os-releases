@@ -18,6 +18,7 @@ import {
   clearRoomTyping, deleteRoomMessage, editRoomMessage, sendRoomMessage, setMyRoomReactions, stampRoomTyping, watchRoomMessages, watchRoomTyping,
 } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
+import { notifyMentions } from '../../data/notifications.js';
 import { uploadPicked } from '../../lib/files.js';
 import { insertAt, placeCaret } from '../../lib/insert.js';
 import './RoomChat.css';
@@ -128,7 +129,9 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
     try {
       const labels = [];
       for (const picked of files) labels.push(await uploadPicked(picked, (p) => setProgress((prev) => ({ ...prev, [picked.id]: p }))));
-      await sendRoomMessage(hub.id, room.id, user.uid, { text, files: labels, replyTo: replyLabel(replyTo) });
+      const sent = await sendRoomMessage(hub.id, room.id, user.uid, { text, files: labels, replyTo: replyLabel(replyTo) });
+      // @someone here hears of it, when they may open this Room.
+      notifyMentions(user.uid, { hubId: hub.id, roomId: room.id, messageId: sent.id, text: text.trim() }).catch(() => {});
       setText('');
       stamper.current?.stop();
       setFiles([]);

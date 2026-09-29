@@ -26,6 +26,7 @@ import {
   watchMessages, watchTyping,
 } from '../data/api.js';
 import { lookupUsername } from '../data/identity.js';
+import { notifyMentions } from '../data/notifications.js';
 import { loadProfile, usePerson } from '../data/people.js';
 import { discordShowOf } from '../data/profile.js';
 import { useSession } from '../data/session.jsx';
@@ -414,11 +415,14 @@ function Conversation({ convo, me }) {
     try {
       const labels = [];
       for (const picked of files) labels.push(await uploadPicked(picked, (p) => setProgress((prev) => ({ ...prev, [picked.id]: p }))));
-      await sendMessage(convo.id, me.uid, {
+      const messageId = await sendMessage(convo.id, me.uid, {
         text,
         files: labels,
         replyTo: replyTo ? { id: replyTo.id, from: replyTo.from, text: plainText(replyTo.text) || describeAttachment(replyTo) } : null,
       });
+      // @someone in a group or a Hub's chat hears of it (in a direct chat
+      // the message itself is the notice).
+      if (convo.kind !== 'direct') notifyMentions(me.uid, { convoId: convo.id, members: convo.members, messageId, text: text.trim() }).catch(() => {});
       setText('');
       saveDraft(convo.id, '');
       stamper.current?.stop();

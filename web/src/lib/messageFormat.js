@@ -226,6 +226,26 @@ export function parseMessage(text) {
   return blocks;
 }
 
+/**
+ * The usernames a message mentions, as they are drawn (so not inside code),
+ * lowercased, each once, at most `max`: who a mention notice goes to.
+ */
+export function mentionsIn(text, max = 10) {
+  const found = new Set();
+  const walk = (nodes) => {
+    for (const node of nodes ?? []) {
+      if (node.type === 'mention') found.add(node.name.toLowerCase());
+      else if (node.children) walk(node.children);
+    }
+  };
+  for (const block of parseMessage(text)) {
+    if (block.type === 'paragraph' || block.type === 'quote') block.lines.forEach(walk);
+    else if (block.type === 'list') block.items.forEach((item) => walk(item.children));
+    else if (block.type !== 'code') walk(block.children);
+  }
+  return [...found].slice(0, max);
+}
+
 /** The message as plain words, for previews and notifications: marks dropped, links kept. */
 export function plainText(text) {
   const words = (nodes) => nodes.map((node) => {
