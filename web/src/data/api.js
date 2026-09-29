@@ -13,6 +13,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, authReady, db } from '../lib/firebase.js';
+import { recountHub } from '../lib/files.js';
 import { countOf, forgetCount } from '../lib/counts.js';
 
 // ------------------------------------------------------------------ shapes
@@ -202,8 +203,9 @@ export function deleteRole(hubId, roleId) {
 export function setMemberRole(hubId, uid, { role, level }) {
   return updateDoc(doc(db, 'hubs', hubId, 'members', uid), { role, level });
 }
-export function removeMember(hubId, uid) {
-  return deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
+export async function removeMember(hubId, uid) {
+  await deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
+  recountHub(hubId).catch(() => {});
 }
 export function barPerson(hubId, uid, reason, me = auth.currentUser) {
   return setDoc(doc(db, 'hubs', hubId, 'bars', uid), withoutEmpty({ by: me.uid, reason: reason?.trim(), createdAt: serverTimestamp() }));
@@ -234,13 +236,18 @@ export async function getHub(hubId) {
   const snap = await readOrMissing(doc(db, 'hubs', hubId));
   if (!snap) notFound();
   const hub = cleanHub(hubId, snap.data());
-  const [roles, members, posts] = await Promise.all([
+  const [roles, members, posts, stats] = await Promise.all([
     getDocs(collection(db, 'hubs', hubId, 'roles')),
     getDocs(query(collection(db, 'hubs', hubId, 'members'), limit(500))),
     listPosts({ hubId }, 30),
+    // The member count the file service keeps (hub_stats): the list below
+    // stops at 500, the count doesn't.
+    getDoc(doc(db, 'hub_stats', hubId)).catch(() => null),
   ]);
+  const counted = stats?.exists() ? stats.data().pledged : null;
   return {
     hub,
+    pledged: Number.isInteger(counted) && counted >= 0 ? counted : null,
     roles: roles.docs
       .map((d) => ({ id: d.id, name: text(d.data().name, 24), color: hex(d.data().color, '#F4F4F5'), level: d.data().level, order: d.data().order ?? 0 }))
       .sort((a, b) => a.order - b.order),
@@ -312,11 +319,13 @@ export async function pledge(hubId, me) {
     role: roles.docs[0].id, level: 'member', uid: me.uid, name: me.username, joinedAt: serverTimestamp(),
   });
   noteHub(me.uid, hubId, true);
+  recountHub(hubId).catch(() => {});
 }
 
 export async function unpledge(hubId, uid) {
   await deleteDoc(doc(db, 'hubs', hubId, 'members', uid));
   noteHub(uid, hubId, false);
+  recountHub(hubId).catch(() => {});
 }
 
 // ------------------------------------------------------- your Hubs, listed

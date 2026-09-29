@@ -55,8 +55,17 @@ const EARNINGS = { id: 'earnings', label: 'Earnings' };
 
 const LEVEL_LABEL = { owner: 'Runs the Hub', mod: 'Keeps it tidy', member: 'Pledged' };
 
+// The list loaded with the page stops at 500 people: below that it is exact
+// and changes as people pledge; at 500 the file service's count
+// (hub_stats) says how many there really are.
+const MEMBERS_LOADED = 500;
+function pledgedCount(listed, counted) {
+  if (listed < MEMBERS_LOADED || counted === null || counted === undefined) return listed;
+  return Math.max(listed, counted).toLocaleString();
+}
+
 export default function Hub() {
-  const { hub: loadedHub, roles: loadedRoles, members: loadedMembers, posts: loadedPosts } = useLoaderData();
+  const { hub: loadedHub, roles: loadedRoles, members: loadedMembers, posts: loadedPosts, pledged: counted } = useLoaderData();
   // The Hub, its roles and its people, as the owner's tools last changed
   // them (without loading the page again).
   const [hub, setHub] = useState(loadedHub);
@@ -136,7 +145,7 @@ export default function Hub() {
         <div className="hub__names">
           <h1 className="hub__name">{hub.name}</h1>
           <p className="hub__meta">
-            {[hub.tagline, hub.tag && `#${hub.tag}`, `${members.length} pledged`, hub.visibility === 'public' ? 'Public' : 'Private']
+            {[hub.tagline, hub.tag && `#${hub.tag}`, `${pledgedCount(members.length, counted)} pledged`, hub.visibility === 'public' ? 'Public' : 'Private']
               .filter(Boolean)
               .join(' · ')}
           </p>
