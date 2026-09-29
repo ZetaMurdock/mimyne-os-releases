@@ -306,3 +306,8 @@
 .hub__rules-text {
   white-space: pre-line;
 }
+
+/* A Hub's own accent: its buttons wear it, with ink that reads on it. */
+.hub .btn--primary {
+  --btn-fg: var(--hub-accent-ink, #fff);
+}

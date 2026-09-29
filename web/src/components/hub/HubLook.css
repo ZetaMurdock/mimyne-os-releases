@@ -150,3 +150,91 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.hublook__page-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hublook__hide {
+  align-self: flex-end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.hublook__hide:hover {
+  color: var(--text);
+}
+
+.hublook__hidden {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.hublook__hidden-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.hublook__tick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.hublook__accents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hublook__accent {
+  width: 28px;
+  height: 28px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hublook__accent.is-on {
+  border-color: var(--text);
+}
+
+.hublook__accent--none {
+  width: auto;
+  padding: 0 10px;
+  border-color: var(--border-2);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.hublook__accent--own {
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border-color: var(--border-2);
+}
+
+.hublook__accent--own input {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}

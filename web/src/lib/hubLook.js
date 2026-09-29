@@ -42,6 +42,27 @@ export function cleanHubPanels(panels) {
   return normalizePanels(panels).map((panel) => (HTTPS.test(panel.src) ? panel : { ...panel, src: '' }));
 }
 
+/** { page: [ids] } as kept: known pages, string ids, no repeats, at most `max` each. */
+export function cleanHidden(hidden, max = 20) {
+  const out = {};
+  if (!hidden || typeof hidden !== 'object') return out;
+  for (const id of PAGE_IDS) {
+    const list = Array.isArray(hidden[id]) ? [...new Set(hidden[id].filter((x) => typeof x === 'string' && x && x.length <= 128))].slice(0, max) : [];
+    if (list.length) out[id] = list;
+  }
+  return out;
+}
+
+/** The hidden lists after one page's list is set. An empty list takes the page away. */
+export function withHidden(hidden, page, ids, max = 20) {
+  const next = { ...cleanHidden(hidden, max) };
+  if (!PAGE_IDS.includes(page)) return next;
+  const list = cleanHidden({ [page]: ids }, max)[page];
+  if (list) next[page] = list;
+  else delete next[page];
+  return next;
+}
+
 /** The pages map as kept: known pages, known words, nothing else. */
 export function cleanPages(pages) {
   const out = {};
@@ -68,6 +89,9 @@ export function cleanHubLook(data) {
     bgPanelGap: num(data?.bgPanelGap, 1.2, 0, 12),
     bgPanelLineColor: HEX.test(data?.bgPanelLineColor || '') ? data.bgPanelLineColor : '#000000',
     pages: cleanPages(data?.pages),
+    // Pages hidden from named roles (the people are kept apart, for mods' eyes).
+    pagesHidden: cleanHidden(data?.pagesHidden),
+    accent: HEX.test(data?.accent || '') ? data.accent : null,
   };
 }
 
@@ -79,13 +103,15 @@ export const hasBackdrop = (look) =>
  * Whether someone at `level` (data/rooms.js levelIn: -1 signed out, 0
  * signed in, 1 pledged, 2 mod, 3 owner) may see a page of the Hub.
  */
-export function canSeePage(look, page, level) {
+export function canSeePage(look, page, level, { role = null, owner = false } = {}) {
   const who = look?.pages?.[page] ?? 'everyone';
-  return who === 'everyone' || level >= NEED[who];
+  if (!(who === 'everyone' || level >= NEED[who])) return false;
+  // Hidden from your role (the owner never is). By name is the rules' to say.
+  return owner || !role || !(look?.pagesHidden?.[page] ?? []).includes(role);
 }
 
 /** The tabs someone may see, in order. */
-export const visiblePages = (look, level) => PAGES.filter((p) => canSeePage(look, p.id, level));
+export const visiblePages = (look, level, who = {}) => PAGES.filter((p) => canSeePage(look, p.id, level, who));
 
 /** What the pages map looks like after one page is set. 'everyone' takes the entry away. */
 export function withPage(pages, page, who) {

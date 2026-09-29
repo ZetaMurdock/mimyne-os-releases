@@ -561,6 +561,13 @@ function Message({ message, meUid, mine, group, answered, editing, onReply, onEd
   const author = usePerson(group && !mine ? message.from : null);
   const quoted = usePerson(message.replyTo && message.replyTo.from !== meUid ? message.replyTo.from : null);
   const [draft, setDraft] = useState(message.text);
+  // The edit box starts from the words as they are now: an edit made on
+  // another device since this message first showed is not lost (Room chat
+  // does the same).
+  useEffect(() => {
+    if (editing) setDraft(message.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
 
   return (
     <div className={`msg ${mine ? 'is-mine' : ''}`} id={`m-${message.id}`}>

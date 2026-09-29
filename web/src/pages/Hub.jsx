@@ -25,6 +25,13 @@ import { useHubAccess, useSession } from '../data/session.jsx';
 import { useSupportMinutes } from '../data/support.js';
 import './Hub.css';
 
+// Light ink on a dark accent, dark on a light one.
+function inkOn(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.6 ? '#050505' : '#ffffff';
+}
+
 export function hubLoader({ params }) {
   return getHub(params.slug);
 }
@@ -76,7 +83,19 @@ export default function Hub() {
   // The pages the owner kept for some: not shown to the rest (and the rules
   // refuse what is on them, lib/hubLook.js).
   const level = levelIn(hub, user, members, access.isPledged);
-  const tabs = [...TABS.filter((t) => canSeePage(look, t.id, level)), ...(user && hub.ownerId === user.uid ? [EARNINGS] : [])];
+  // Hidden from your role: not shown (by name, the rules refuse what is on it).
+  const myRole = user ? members.find((m) => m.uid === user.uid)?.role ?? null : null;
+  const tabs = [
+    ...TABS.filter((t) => canSeePage(look, t.id, level, { role: myRole, owner: !!user && hub.ownerId === user.uid })),
+    ...(user && hub.ownerId === user.uid ? [EARNINGS] : []),
+  ];
+  // The Hub's own accent, with ink that reads on it.
+  const accentStyle = look.accent ? {
+    '--accent': look.accent,
+    '--accent-hover': `color-mix(in srgb, ${look.accent} 85%, black)`,
+    '--accent-press': `color-mix(in srgb, ${look.accent} 70%, black)`,
+    '--hub-accent-ink': inkOn(look.accent),
+  } : undefined;
   const tab = tabs.some((t) => t.id === params.get('tab')) ? params.get('tab') : (tabs[0]?.id ?? 'rooms');
   const setTab = (id, extra = {}) =>
     setParams(Object.fromEntries(Object.entries({ tab: id === 'rooms' ? null : id, ...extra }).filter(([, v]) => v)), { replace: true, preventScrollReset: true });
@@ -87,7 +106,7 @@ export default function Hub() {
   const roleOf = (uid) => roles.find((r) => r.id === members.find((m) => m.uid === uid)?.role) ?? null;
 
   return (
-    <div className={`hub ${user ? 'hub--under-notch' : ''} ${hasBackdrop(look) ? 'hub--backdrop' : ''}`}>
+    <div className={`hub ${user ? 'hub--under-notch' : ''} ${hasBackdrop(look) ? 'hub--backdrop' : ''}`} style={accentStyle}>
       {/* The background behind the whole page: a picture or video, or the
           panels the owner laid out in the app (lib/hubLook.js). */}
       {look.bgMode === 'image' && look.background && (
@@ -262,6 +281,7 @@ export default function Hub() {
           hub={hub}
           look={look}
           roles={roles}
+          members={members}
           panelsDesigner={slots.hubPanelsDesigner || null}
           onClose={() => setCustomizing(false)}
           onSaved={setLook}

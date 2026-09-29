@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HubIcon } from '../Avatar.jsx';
 import Button from '../Button.jsx';
 import CropBox from '../CropBox.jsx';
 import Dialog from '../Dialog.jsx';
 import PanelBackground from '../PanelBackground.jsx';
-import { updateHubLook } from '../../data/api.js';
+import { HUB_COLORS, getHiddenPeople, saveHiddenPeople, updateHubLook } from '../../data/api.js';
+import { usePerson } from '../../data/people.js';
 import { uploadFile } from '../../lib/files.js';
-import { MAX_PICTURE_LINK, PAGES, WHO, cleanPicture, hasBackdrop, isVideoLink, withPage } from '../../lib/hubLook.js';
+import { MAX_PICTURE_LINK, PAGES, WHO, cleanPicture, hasBackdrop, isVideoLink, withHidden, withPage } from '../../lib/hubLook.js';
 import { cropStyle } from '../../lib/profileShapes.js';
 import './HubLook.css';
 
@@ -21,8 +22,23 @@ const MEDIA = `${PICTURES},video/mp4,video/webm,video/quicktime`;
  * kept as it is. `panelsDesigner` is the app's designer when this runs in
  * the app (appSlots), else null and panels are read only here.
  */
-export default function HubLook({ hub, look, roles, onClose, onSaved, panelsDesigner: Designer = null }) {
+export default function HubLook({ hub, look, roles, members = [], onClose, onSaved, panelsDesigner: Designer = null }) {
   const [draft, setDraft] = useState(look);
+  // The people each page is hidden from (kept apart from the Hub, for mods' eyes).
+  const [people, setPeople] = useState({});
+  const [peopleLoaded, setPeopleLoaded] = useState(false);
+  const [hiding, setHiding] = useState(null); // the page whose hidden-from list is open
+  useEffect(() => {
+    let live = true;
+    getHiddenPeople(hub.id).then((hidden) => {
+      if (!live) return;
+      setPeople(hidden);
+      setPeopleLoaded(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [hub.id]);
   const [links, setLinks] = useState({ icon: '', banner: '', background: '' });
   const [progress, setProgress] = useState({});
   const [designing, setDesigning] = useState(false);
@@ -58,6 +74,7 @@ export default function HubLook({ hub, look, roles, onClose, onSaved, panelsDesi
     setError(null);
     try {
       await updateHubLook(hub.id, draft);
+      if (peopleLoaded) await saveHiddenPeople(hub.id, people);
       onSaved?.(draft);
       onClose();
     } catch (err) {
@@ -157,16 +174,51 @@ export default function HubLook({ hub, look, roles, onClose, onSaved, panelsDesi
 
         <section className="hublook__section">
           <h3 className="label">Pages</h3>
-          <p className="muted">Who can see each page. A page kept from someone is not shown to them, and what is on it cannot be read.</p>
+          <p className="muted">Who can see each page, and roles or people it is hidden from. A page kept from someone is not shown to them, and what is on it cannot be read. Who a page is hidden from by name is seen only by you and your mods.</p>
           <div className="hublook__pages">
-            {PAGES.map((page) => (
-              <label key={page.id} className="hublook__page">
-                <span>{page.label}</span>
-                <select value={draft.pages[page.id] ?? 'everyone'} onChange={(e) => set({ pages: withPage(draft.pages, page.id, e.target.value) })}>
-                  {WHO.map((who) => <option key={who} value={who}>{whoLabel(who)}</option>)}
-                </select>
-              </label>
+            {PAGES.map((page) => {
+              const hiddenRoles = draft.pagesHidden?.[page.id] ?? [];
+              const hiddenPeople = people[page.id] ?? [];
+              const count = hiddenRoles.length + hiddenPeople.length;
+              return (
+                <div key={page.id} className="hublook__page-block">
+                  <label className="hublook__page">
+                    <span>{page.label}</span>
+                    <select value={draft.pages[page.id] ?? 'everyone'} onChange={(e) => set({ pages: withPage(draft.pages, page.id, e.target.value) })}>
+                      {WHO.map((who) => <option key={who} value={who}>{whoLabel(who)}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" className="hublook__hide" onClick={() => setHiding(hiding === page.id ? null : page.id)} aria-expanded={hiding === page.id}>
+                    {count ? `Hidden from ${count}` : 'Hide from…'}
+                  </button>
+                  {hiding === page.id && (
+                    <HiddenFrom
+                      roles={roles.filter((r) => r.level !== 'owner')}
+                      members={members.filter((m) => m.uid !== hub.ownerId)}
+                      hiddenRoles={hiddenRoles}
+                      hiddenPeople={hiddenPeople}
+                      peopleLoaded={peopleLoaded}
+                      onRoles={(ids) => set({ pagesHidden: withHidden(draft.pagesHidden, page.id, ids) })}
+                      onPeople={(ids) => setPeople((p) => withHidden(p, page.id, ids, 200))}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="hublook__section">
+          <h3 className="label">Accent</h3>
+          <p className="muted">The color of the Hub's buttons and marks.</p>
+          <div className="hublook__accents" role="radiogroup" aria-label="Accent">
+            <button type="button" role="radio" aria-checked={!draft.accent} className={`hublook__accent hublook__accent--none ${!draft.accent ? 'is-on' : ''}`} onClick={() => set({ accent: null })}>Mimyne's</button>
+            {HUB_COLORS.map((c) => (
+              <button key={c} type="button" role="radio" aria-checked={draft.accent === c} aria-label={c} className={`hublook__accent ${draft.accent === c ? 'is-on' : ''}`} style={{ background: c }} onClick={() => set({ accent: c })} />
             ))}
+            <label className="hublook__accent hublook__accent--own" title="Your own">
+              <input type="color" value={draft.accent || '#7c3aed'} onChange={(e) => set({ accent: e.target.value })} aria-label="Your own accent" />
+            </label>
           </div>
         </section>
 
@@ -185,5 +237,42 @@ export default function HubLook({ hub, look, roles, onClose, onSaved, panelsDesi
         </div>
       </div>
     </Dialog>
+  );
+}
+
+// The roles and people a page is hidden from: ticks.
+function HiddenFrom({ roles, members, hiddenRoles, hiddenPeople, peopleLoaded, onRoles, onPeople }) {
+  const toggle = (list, id) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  return (
+    <div className="hublook__hidden">
+      <div className="hublook__hidden-col">
+        <span className="label">Roles</span>
+        {roles.length === 0 && <span className="muted">No roles to hide it from.</span>}
+        {roles.map((r) => (
+          <label key={r.id} className="hublook__tick">
+            <input type="checkbox" checked={hiddenRoles.includes(r.id)} onChange={() => onRoles(toggle(hiddenRoles, r.id))} />
+            <span style={{ color: r.color }}>{r.name}</span>
+          </label>
+        ))}
+      </div>
+      <div className="hublook__hidden-col">
+        <span className="label">People</span>
+        {!peopleLoaded && <span className="muted">Loading…</span>}
+        {peopleLoaded && members.length === 0 && <span className="muted">Nobody pledged yet.</span>}
+        {peopleLoaded && members.slice(0, 200).map((m) => (
+          <PersonTick key={m.uid} member={m} checked={hiddenPeople.includes(m.uid)} onToggle={() => onPeople(toggle(hiddenPeople, m.uid))} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PersonTick({ member, checked, onToggle }) {
+  const person = usePerson(member.uid, member.name);
+  return (
+    <label className="hublook__tick">
+      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <span>{person.name}</span>
+    </label>
   );
 }
