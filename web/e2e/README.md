@@ -46,3 +46,4 @@ The workflow needs one repository secret, `APP_REPO_TOKEN`. To make one:
 - `files.spec.js`: the storage meter, and an upload refused when storage is full.
 - `messages.spec.js`: a message pinned in a direct chat shows for both people and
   comes off for both; search counts and marks what it finds.
+  In a group, @someone is suggested while typing and the person named gets a notice.
