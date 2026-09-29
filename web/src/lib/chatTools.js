@@ -64,3 +64,42 @@ export function windowFor(since, current = PAGE) {
   if (want > MAX_WINDOW) return null;
   return Math.max(current, want);
 }
+
+// ------------------------------------------------------------------ unread
+
+const ms = (value) => (typeof value?.toMillis === 'function' ? value.toMillis() : typeof value === 'number' ? value : 0);
+
+/**
+ * Someone else's message since I last read: where I have read up to is kept
+ * on the conversation (lastRead), with this device's older memory of when
+ * it was last opened (`seenAt`) as a fallback. Takes a conversation as the
+ * site cleans it ({ at, lastRead: millis }) or as stored ({ lastAt, lastRead:
+ * Timestamps }), so the app's notch counts the same way.
+ */
+export function isUnread(convo, meUid, seenAt = 0) {
+  if (!convo?.lastFrom || convo.lastFrom === meUid) return false;
+  const at = ms(convo.at ?? convo.lastAt);
+  return at > Math.max(ms(convo.lastRead?.[meUid]), seenAt || 0);
+}
+
+/** How many chats have something new, for the Messages button's count. */
+export function unreadCount(convos, meUid, seen = {}) {
+  return (convos ?? []).filter((c) => isUnread(c, meUid, seen[c.id])).length;
+}
+
+// When each conversation was last opened on this device (the older memory).
+const SEEN_KEY = 'mimyne.seen';
+export function seenMap() {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY)) ?? {};
+  } catch {
+    return {};
+  }
+}
+export function markSeen(id) {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify({ ...seenMap(), [id]: Date.now() }));
+  } catch {
+    // Storage blocked: the dot just stays until the chat is read.
+  }
+}

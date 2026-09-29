@@ -401,3 +401,20 @@
 .notch__menu-form .field__input {
   height: 32px;
 }
+
+/* How many chats have something new, on the Messages button. */
+.notch__count {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
