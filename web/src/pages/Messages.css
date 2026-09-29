@@ -285,6 +285,7 @@
 }
 
 .inbox__composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
@@ -829,4 +830,44 @@
 .inbox__pin-off:hover {
   background: var(--hover);
   color: var(--text);
+}
+
+/* @someone: who can be mentioned, over the composer; and a message that names you. */
+.inbox__mentions {
+  position: absolute;
+  right: 20px;
+  bottom: calc(100% - 12px);
+  left: 20px;
+  z-index: 5;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  background: var(--surface-1);
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 0.45);
+  list-style: none;
+}
+
+.inbox__mention {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.inbox__mention .muted {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.inbox__mention.is-active,
+.inbox__mention:hover {
+  background: var(--hover);
+}
+
+.msg.is-mention .msg__bubble {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
