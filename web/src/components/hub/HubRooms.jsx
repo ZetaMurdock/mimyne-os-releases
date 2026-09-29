@@ -51,10 +51,9 @@ export default function HubRooms({ hub, members, roles, roleOf, user, access, ro
   const [rooms, setRooms] = useState(null);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // a room, or 'new'
-  const [writing, setWriting] = useState(false);
   const madeGeneral = useRef(false);
   const level = levelIn(hub, user, members, access.isPledged);
-  const here = useHere(hub.id, user, roomId, writing);
+  const here = useHere(hub.id, user, roomId);
 
   useEffect(() => watchRooms(hub.id, setRooms, () => setError("This Hub's Rooms couldn't load.")), [hub.id]);
 
@@ -97,7 +96,6 @@ export default function HubRooms({ hub, members, roles, roleOf, user, access, ro
         onBack={() => onRoom(null)}
         onSettings={() => setEditing(open)}
         onSignIn={onSignIn}
-        onWriting={setWriting}
       />
     );
   } else {
@@ -314,7 +312,7 @@ function Miniature({ nodes, empty = 'Empty canvas' }) {
 
 // ------------------------------------------------------------------ a Room
 
-function RoomView({ hub, room, rights, user, access, members, roles, roleOf, here, onBack, onSettings, onSignIn, onWriting }) {
+function RoomView({ hub, room, rights, user, access, members, roles, roleOf, here, onBack, onSettings, onSignIn }) {
   const [nodes, setNodes] = useState(null);
   const [edges, setEdges] = useState([]);
   const [error, setError] = useState(null);
@@ -328,8 +326,11 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
 
   const ready = rights.view && !room.pending;
   const [app, setApp] = useState(null); // an app workspace's name and owner
+  // Read only while the canvas is showing: folded, it keeps its last count, and
+  // nobody is billed for every drag in a canvas they cannot see. Unfolding
+  // within half an hour costs only what changed (the cache in lib/firebase.js).
   useEffect(() => {
-    if (!ready) return undefined;
+    if (!ready || !show.canvas) return undefined;
     if (room.workspace) {
       setNodes(null);
       return watchAppWorkspace(room.workspace, (data) => {
@@ -339,8 +340,10 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
       }, () => setError("This workspace can't be shown here right now. Its owner may have taken it out of this Room."));
     }
     return watchCanvas(hub.id, room.id, setNodes, setEdges, () => setError("This Room's canvas couldn't load."));
-  }, [hub.id, room.id, ready, room.workspace]);
-  useEffect(() => (ready ? watchLatest(hub.id, room.id, setLatest) : undefined), [hub.id, room.id, ready]);
+  }, [hub.id, room.id, ready, room.workspace, show.canvas]);
+  // The newest message, for the dot on a folded chat. With the chat open it
+  // is already on screen: a second listener would bill every message twice.
+  useEffect(() => (ready && !show.chat ? watchLatest(hub.id, room.id, setLatest) : undefined), [hub.id, room.id, ready, show.chat]);
   useEffect(() => {
     if (show.chat) setSeenAt(Date.now());
   }, [show.chat, latest?.at]);
@@ -448,7 +451,6 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
                   uid={user?.uid}
                   hubId={hub.id}
                   roomId={room.id}
-                  onWriting={onWriting}
                 />
               )}
             </div>
@@ -463,7 +465,7 @@ function RoomView({ hub, room, rights, user, access, members, roles, roleOf, her
           )}
           {show.chat ? (
             <div className="room-view__chat" style={show.canvas ? { height: chatHeight } : undefined}>
-              {room.pending ? <div className="room-view__loading">Setting up the Room…</div> : <RoomChat hub={hub} room={room} user={user} access={access} members={members} roleOf={roleOf} onSignIn={onSignIn} />}
+              {room.pending ? <div className="room-view__loading">Setting up the Room…</div> : <RoomChat hub={hub} room={room} user={user} access={access} members={members} roleOf={roleOf} onSignIn={onSignIn} crowd={inside.length} />}
             </div>
           ) : (
             <button type="button" className="room-view__folded" onClick={() => toggle('chat')}>
@@ -497,27 +499,36 @@ function readChatHeight() {
   return 280;
 }
 
-/** Keeps you on the Hub's "here" list while you're in its Rooms (unless you're invisible). */
-function useHere(hubId, user, roomId, writing) {
+/** Keeps you on the Hub's "here" list while you're inside one of its Rooms (unless you're invisible). */
+function useHere(hubId, user, roomId) {
   const [here, setHere] = useState({});
   const [mode, setMode] = useState(null);
   useEffect(() => watchHere(hubId, setHere), [hubId]);
   useEffect(() => (user ? watchStatusSettings(user.uid, (s) => setMode(s?.mode ?? 'auto')) : undefined), [user?.uid]);
   useEffect(() => {
     if (!user || !mode) return undefined;
-    if (mode === 'invisible') {
+    // On the grid nobody is shown, so nothing is stamped: back from a Room
+    // takes you off the list.
+    if (mode === 'invisible' || !roomId) {
       leaveHere(hubId, user.uid);
       return undefined;
     }
-    const beat = () => document.visibilityState === 'visible' && stampHere(hubId, user.uid, roomId ?? undefined, writing);
+    let last = 0;
+    const stamp = () => {
+      last = Date.now();
+      stampHere(hubId, user.uid, roomId);
+    };
+    const beat = () => document.visibilityState === 'visible' && stamp();
+    // Coming back to the tab stamps only when the last stamp is getting old.
+    const back = () => document.visibilityState === 'visible' && Date.now() - last > HERE_BEAT_MS / 2 && stamp();
     beat();
     const timer = setInterval(beat, HERE_BEAT_MS);
-    document.addEventListener('visibilitychange', beat);
+    document.addEventListener('visibilitychange', back);
     return () => {
       clearInterval(timer);
-      document.removeEventListener('visibilitychange', beat);
+      document.removeEventListener('visibilitychange', back);
     };
-  }, [hubId, user?.uid, mode, roomId, writing]);
+  }, [hubId, user?.uid, mode, roomId]);
   // Leaving the Hub takes you off the list at once.
   useEffect(() => () => user && leaveHere(hubId, user.uid), [hubId, user?.uid]);
   return here;

@@ -6,9 +6,9 @@ import './TypingLine.css';
 // "Ann is typing" under a chat (lib/typing.js): the fresh stamps, not
 // mine, named. Ticks once a second while anyone is, so a stamp that went
 // stale disappears on its own.
-export default function TypingLine({ stamps, meUid }) {
+export default function TypingLine({ stamps, meUid, freshMs }) {
   const [now, setNow] = useState(() => Date.now());
-  const uids = typingNow(stamps, now, meUid);
+  const uids = typingNow(stamps, now, meUid, freshMs);
   const any = Object.keys(stamps ?? {}).length > 0;
   useEffect(() => {
     if (!any) return undefined;
