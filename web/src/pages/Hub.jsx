@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react';
 import { useLoaderData, useSearchParams } from 'react-router-dom';
 import { HubIcon } from '../components/Avatar.jsx';
 import Button from '../components/Button.jsx';
-import Composer from '../components/Composer.jsx';
 import Icon from '../components/Icon.jsx';
 import PledgeButton from '../components/PledgeButton.jsx';
-import PostCard from '../components/PostCard.jsx';
 import RoleChip from '../components/RoleChip.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
 import ReportDialog from '../components/ReportDialog.jsx';
@@ -15,12 +13,13 @@ import HubFiles from '../components/hub/HubFiles.jsx';
 import HubRooms from '../components/hub/HubRooms.jsx';
 import HubLook from '../components/hub/HubLook.jsx';
 import HubBoard from '../components/hub/HubBoard.jsx';
+import HubSettings from '../components/hub/HubSettings.jsx';
 import PanelBackground from '../components/PanelBackground.jsx';
 import { canSeePage, hasBackdrop, isVideoLink } from '../lib/hubLook.js';
 import { cropStyle } from '../lib/profileShapes.js';
 import { levelIn } from '../data/rooms.js';
 import { Avatar } from '../components/Avatar.jsx';
-import { createPost, getHub } from '../data/api.js';
+import { getHub, getHubPeople } from '../data/api.js';
 import { usePerson } from '../data/people.js';
 import { useHubAccess, useSession } from '../data/session.jsx';
 import { useSupportMinutes } from '../data/support.js';
@@ -50,7 +49,13 @@ const EARNINGS = { id: 'earnings', label: 'Earnings' };
 const LEVEL_LABEL = { owner: 'Runs the Hub', mod: 'Keeps it tidy', member: 'Pledged' };
 
 export default function Hub() {
-  const { hub, roles, members, posts: loadedPosts } = useLoaderData();
+  const { hub: loadedHub, roles: loadedRoles, members: loadedMembers, posts: loadedPosts } = useLoaderData();
+  // The Hub, its roles and its people, as the owner's tools last changed
+  // them (without loading the page again).
+  const [hub, setHub] = useState(loadedHub);
+  const [{ roles, members }, setPeople] = useState({ roles: loadedRoles, members: loadedMembers });
+  const [settings, setSettings] = useState(false);
+  const refreshPeople = () => getHubPeople(hub.id).then(setPeople).catch(() => {});
   const { user, signIn } = useSession();
   const access = useHubAccess(hub, members);
   // Plus supports Hubs: the qualified minutes spent here (data/support.js).
@@ -80,11 +85,6 @@ export default function Hub() {
   const [posts, setPosts] = useState(loadedPosts);
 
   const roleOf = (uid) => roles.find((r) => r.id === members.find((m) => m.uid === uid)?.role) ?? null;
-
-  async function post({ text, files }) {
-    const created = await createPost({ hubId: hub.id }, { me: user, body: text, files });
-    setPosts((prev) => [created, ...prev]);
-  }
 
   return (
     <div className={`hub ${user ? 'hub--under-notch' : ''} ${hasBackdrop(look) ? 'hub--backdrop' : ''}`}>
@@ -123,8 +123,10 @@ export default function Hub() {
           </p>
         </div>
         <div className="hub__actions">
-          {user && hub.ownerId === user.uid && (
-            <Button icon="pen" onClick={() => setCustomizing(true)} title="Its icon, banner, background and pages">Customize</Button>
+          {access.canModerate && (
+            <Button icon="gear" onClick={() => setSettings(true)} title={hub.ownerId === user?.uid ? 'Its details, roles, people and look' : 'Its people'}>
+              {hub.ownerId === user?.uid ? 'Settings' : 'People'}
+            </Button>
           )}
           <Button icon="share" iconOnly aria-label="Share this Hub" onClick={() => setSharing(true)} />
           <PledgeButton hub={hub} pledgedHere={access.isPledged} />
@@ -237,6 +239,24 @@ export default function Hub() {
           onClose={() => setReporting(false)}
         />
       )}
+      {settings && (
+        <HubSettings
+          hub={hub}
+          roles={roles}
+          members={members}
+          user={user}
+          level={access.level}
+          onClose={() => setSettings(false)}
+          onChanged={(change) => {
+            if (change?.details) setHub((h) => ({ ...h, ...change.details, tag: change.details.tag.replace(/^#/, '') }));
+            refreshPeople();
+          }}
+          onLook={() => {
+            setSettings(false);
+            setCustomizing(true);
+          }}
+        />
+      )}
       {customizing && (
         <HubLook
           hub={hub}
@@ -287,16 +307,3 @@ function Rules({ hub, short = false }) {
   );
 }
 
-function LockedComposer({ text, action, onAction }) {
-  return (
-    <div className="hub__locked">
-      <Icon name="lock" size={18} />
-      <span>{text}</span>
-      {action && (
-        <Button size="md" onClick={onAction}>
-          {action}
-        </Button>
-      )}
-    </div>
-  );
-}
