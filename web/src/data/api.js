@@ -6,8 +6,9 @@ import { cleanReactions } from '../lib/reactions.js';
 import { cleanFolders } from '../lib/hubFolders.js';
 import { cleanHidden, cleanHubLook, cleanPages } from '../lib/hubLook.js';
 import { cleanBoard } from '../lib/hubBoards.js';
+import { PAGE, cleanPins } from '../lib/chatTools.js';
 import {
-  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getDoc, getDocs,
+  addDoc, arrayRemove, arrayUnion, collection, collectionGroup, deleteDoc, deleteField, doc, getCountFromServer, getDoc, getDocs,
   limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
   writeBatch,
 } from 'firebase/firestore';
@@ -645,6 +646,8 @@ function cleanConversation(id, data, uid) {
       .map(([member, at]) => [member, millis(at)])
       .filter(([, at]) => Number.isFinite(at))),
     other: data.kind === 'direct' ? (data.members ?? []).find((m) => m !== uid) : null,
+    // Pinned messages, by id, oldest first (lib/chatTools.js).
+    pins: cleanPins(data.pins),
   };
 }
 
@@ -706,12 +709,36 @@ export function cleanMessage(id, m) {
   };
 }
 
-export function watchMessages(convoId, onChange, onError) {
+/** The newest `count` messages, oldest first. */
+export function watchMessages(convoId, onChange, onError, count = PAGE) {
   return onSnapshot(
-    query(collection(db, 'conversations', convoId, 'messages'), orderBy('createdAt', 'asc'), limitToLast(300)),
+    query(collection(db, 'conversations', convoId, 'messages'), orderBy('createdAt', 'asc'), limitToLast(count)),
     (snap) => onChange(snap.docs.map((d) => cleanMessage(d.id, d.data()))),
     onError,
   );
+}
+
+/** One message, for a pin further back than the chat shows; null when it was deleted. */
+export async function getMessage(convoId, messageId) {
+  const snap = await getDoc(doc(db, 'conversations', convoId, 'messages', messageId));
+  return snap.exists() ? cleanMessage(snap.id, snap.data()) : null;
+}
+
+/**
+ * How many messages there are from this one to the newest, to show enough
+ * of the chat to jump back to it; null when it was deleted.
+ */
+export async function messagesSince(convoId, messageId) {
+  const snap = await getDoc(doc(db, 'conversations', convoId, 'messages', messageId));
+  const at = snap.exists() ? snap.get('createdAt') : null;
+  if (!at) return null;
+  const counted = await getCountFromServer(query(collection(db, 'conversations', convoId, 'messages'), where('createdAt', '>=', at)));
+  return counted.data().count;
+}
+
+/** Pin or unpin a message for everyone in the chat. */
+export function setPinned(convoId, messageId, pinned) {
+  return updateDoc(doc(db, 'conversations', convoId), { pins: pinned ? arrayUnion(messageId) : arrayRemove(messageId) });
 }
 
 /**

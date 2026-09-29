@@ -44,3 +44,5 @@ The workflow needs one repository secret, `APP_REPO_TOKEN`. To make one:
 - `reports.spec.js`: reporting a Hub and a post. Only staff see reports, and
   staff resolve them.
 - `files.spec.js`: the storage meter, and an upload refused when storage is full.
+- `messages.spec.js`: a message pinned in a direct chat shows for both people and
+  comes off for both; search counts and marks what it finds.
