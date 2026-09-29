@@ -6,7 +6,7 @@
 // values through VITE_FIREBASE_* instead, so it never touches real data.
 import { initializeApp } from 'firebase/app';
 import { GoogleAuthProvider, OAuthProvider, connectAuthEmulator, getAuth, onAuthStateChanged } from 'firebase/auth';
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, memoryLruGarbageCollector } from 'firebase/firestore';
 
 const env = import.meta.env;
 const LIVE = {
@@ -34,7 +34,13 @@ const app = initializeApp(STAGING
   : LIVE);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Listeners let go keep their place in a memory cache (up to 40 MB), so
+// listening again within 30 minutes (a Room opened again, a tab switched
+// back, the chat unfolded) is billed only for what changed, not for every
+// document again. The default cache forgot a query the moment it closed.
+export const db = initializeFirestore(app, {
+  localCache: memoryLocalCache({ garbageCollector: memoryLruGarbageCollector({ cacheSizeBytes: 40 * 1024 * 1024 }) }),
+});
 
 // `VITE_EMULATORS=true npm run dev` points the site at the local Firebase
 // emulators (auth on 9099, Firestore on 8085, as in the app's firebase.json).

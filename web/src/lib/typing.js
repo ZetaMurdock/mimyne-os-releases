@@ -11,9 +11,9 @@ export const TYPING_FRESH_MS = 8_000;
 export const TYPING_EVERY_MS = 4_000;
 
 /** The uids typing now, from { uid: at-in-ms }, me left out, newest first. */
-export function typingNow(stamps, now = Date.now(), meUid = null) {
+export function typingNow(stamps, now = Date.now(), meUid = null, freshMs = TYPING_FRESH_MS) {
   return Object.entries(stamps ?? {})
-    .filter(([uid, at]) => uid !== meUid && Number.isFinite(at) && now - at < TYPING_FRESH_MS)
+    .filter(([uid, at]) => uid !== meUid && Number.isFinite(at) && now - at < freshMs)
     .sort((a, b) => b[1] - a[1])
     .map(([uid]) => uid);
 }

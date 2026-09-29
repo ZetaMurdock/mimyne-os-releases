@@ -2,7 +2,7 @@
 // who's in the Hub right now, and its Files shelf. The rules are in the
 // app's repo (firestore.rules, "hubs": rooms, here, files).
 import {
-  Timestamp, addDoc, collection, deleteDoc, deleteField, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
+  Timestamp, addDoc, collection, deleteDoc, deleteField, doc, getDocs, limit, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, startAfter, updateDoc, where,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { cleanFiles, cleanMessage } from './api.js';
@@ -144,12 +144,35 @@ export function levelIn(hub, user, members, isPledged) {
 
 const messagesOf = (hubId, roomId) => collection(db, 'hubs', hubId, 'rooms', roomId, 'messages');
 
-export function watchRoomMessages(hubId, roomId, onChange, onError, count = 200) {
+/**
+ * The newest `count` messages, live. With them: `oldest`, the first one's
+ * snapshot (to page back from), and `fellOut`, messages a new one pushed out
+ * of the window, oldest first, so the chat can keep showing them.
+ */
+export function watchRoomMessages(hubId, roomId, onChange, onError, count = 50) {
   return onSnapshot(
     query(messagesOf(hubId, roomId), orderBy('createdAt', 'asc'), limitToLast(count)),
-    (snap) => onChange(snap.docs.map((d) => cleanMessage(d.id, d.data({ serverTimestamps: 'estimate' })))),
+    (snap) => {
+      const list = snap.docs.map((d) => cleanMessage(d.id, d.data({ serverTimestamps: 'estimate' })));
+      const first = list[0]?.at ?? Infinity;
+      // Pushed out, not deleted: the window is full and the message is older
+      // than everything in it now (a deletion pulls an older one in instead).
+      const fellOut = snap.size < count ? [] : snap.docChanges()
+        .filter((c) => c.type === 'removed')
+        .map((c) => ({ snap: c.doc, message: cleanMessage(c.doc.id, c.doc.data({ serverTimestamps: 'estimate' })) }))
+        .filter(({ message }) => message.at < first)
+        .sort((a, b) => a.message.at - b.message.at);
+      onChange(list, { oldest: snap.docs[0] ?? null, fellOut });
+    },
     onError,
   );
+}
+
+/** One page of messages older than `before` (a message's snapshot), read once: oldest first. */
+export async function getRoomMessagesBefore(hubId, roomId, before, count = 50) {
+  const snap = await getDocs(query(messagesOf(hubId, roomId), orderBy('createdAt', 'desc'), startAfter(before), limit(count)));
+  const docs = [...snap.docs].reverse();
+  return { list: docs.map((d) => cleanMessage(d.id, d.data({ serverTimestamps: 'estimate' }))), oldest: docs[0] ?? null };
 }
 
 /** Just the newest message in a Room, for its unread dot. */
@@ -189,7 +212,13 @@ export function setMyRoomReactions(hubId, roomId, messageId, uid, marks) {
   return updateDoc(doc(messagesOf(hubId, roomId), messageId), { [`reactions.${uid}`]: marks.length ? marks : deleteField() });
 }
 
-// "Someone is typing" in a Room (lib/typing.js): the same stamps a conversation has.
+// "Someone is typing" in a Room (lib/typing.js): the same stamps a conversation
+// has, slower, and only while the Room is small. Every stamp is read by
+// everyone inside, so in a busy Room typing cost more than the chat did; the
+// Rooms live server (docs/room-live-server.md in the app) brings it back.
+export const ROOM_TYPING_MAX = 10;
+export const ROOM_TYPING_EVERY_MS = 10_000;
+export const ROOM_TYPING_FRESH_MS = 15_000;
 const typingOf = (hubId, roomId, uid) => doc(db, 'hubs', hubId, 'rooms', roomId, 'typing', uid);
 
 export function stampRoomTyping(hubId, roomId, uid) {
@@ -200,10 +229,10 @@ export function clearRoomTyping(hubId, roomId, uid) {
   return deleteDoc(typingOf(hubId, roomId, uid)).catch(() => {});
 }
 
-/** { uid: at-in-ms } for every stamp there is; the caller keeps the fresh ones. */
+/** { uid: at-in-ms } for the recent stamps (not ones a closed tab left behind); the caller keeps the fresh ones. */
 export function watchRoomTyping(hubId, roomId, onChange) {
   return onSnapshot(
-    collection(db, 'hubs', hubId, 'rooms', roomId, 'typing'),
+    query(collection(db, 'hubs', hubId, 'rooms', roomId, 'typing'), where('at', '>', Timestamp.fromMillis(Date.now() - ROOM_TYPING_FRESH_MS))),
     (snap) => onChange(Object.fromEntries(snap.docs.map((d) => [d.id, millis(d.data({ serverTimestamps: 'estimate' }).at)]))),
     () => onChange({}),
   );
@@ -211,14 +240,17 @@ export function watchRoomTyping(hubId, roomId, onChange) {
 
 // ---------------------------------------------------------- who's here now
 
-// A stamp every two minutes (HubRooms), counted as here for five and a half.
-// Each stamp is read by everyone watching the Hub, so the fewer the better.
-export const HERE_BEAT_MS = 120_000;
-const HERE_FRESH = 330_000;
+// A stamp every five minutes while you're inside a Room (HubRooms), counted as
+// here for eleven. Each stamp is read by everyone watching the Hub, so the
+// fewer the better; leaving takes it away at once. Who is writing on a canvas
+// is no longer stamped (two Hub-wide stamps per note edit): it comes back with
+// the Rooms live server.
+export const HERE_BEAT_MS = 300_000;
+const HERE_FRESH = 660_000;
 
-/** Marks you as in the Hub now (and in which Room); sent again every two minutes. */
-export function stampHere(hubId, uid, room, writing = false) {
-  return setDoc(doc(db, 'hubs', hubId, 'here', uid), withoutEmpty({ at: serverTimestamp(), room, writing: writing || undefined })).catch(() => {});
+/** Marks you as in one of the Hub's Rooms now; sent again every five minutes. */
+export function stampHere(hubId, uid, room) {
+  return setDoc(doc(db, 'hubs', hubId, 'here', uid), withoutEmpty({ at: serverTimestamp(), room })).catch(() => {});
 }
 
 export function leaveHere(hubId, uid) {

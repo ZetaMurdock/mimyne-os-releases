@@ -15,7 +15,8 @@ import { applyFormatKey } from '../../lib/composer.js';
 import { SharedPost, SharedProfile } from '../ShareCards.jsx';
 import { FileCard, PendingFile } from '../FileCard.jsx';
 import {
-  clearRoomTyping, deleteRoomMessage, editRoomMessage, sendRoomMessage, setMyRoomReactions, stampRoomTyping, watchRoomMessages, watchRoomTyping,
+  ROOM_TYPING_EVERY_MS, ROOM_TYPING_FRESH_MS, ROOM_TYPING_MAX,
+  clearRoomTyping, deleteRoomMessage, editRoomMessage, getRoomMessagesBefore, sendRoomMessage, setMyRoomReactions, stampRoomTyping, watchRoomMessages, watchRoomTyping,
 } from '../../data/rooms.js';
 import { usePerson } from '../../data/people.js';
 import { notifyMentions } from '../../data/notifications.js';
@@ -23,12 +24,13 @@ import { uploadPicked } from '../../lib/files.js';
 import { insertAt, placeCaret } from '../../lib/insert.js';
 import './RoomChat.css';
 
-const PAGE = 150;
+// The newest PAGE messages are live; older pages are read once, on asking.
+const PAGE = 50;
 // Messages from one person this close together share one header.
 const RUN_MS = 7 * 60 * 1000;
 
 const describeAttachment = (m) =>
-  m.files?.length ? `📎 ${m.files[0].name}` : m.post ? 'A shared post' : m.profileUid ? 'A shared profile' : '';
+  m.files?.length ? `File: ${m.files[0].name}` : m.post ? 'A shared post' : m.profileUid ? 'A shared profile' : '';
 
 const clock = (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
@@ -46,19 +48,46 @@ function stamp(at) {
   return `${day === 'Today' || day === 'Yesterday' ? `${day} at` : new Date(at).toLocaleDateString()} ${clock(at)}`;
 }
 
-export default function RoomChat({ hub, room, user, access, members, roleOf, onSignIn }) {
-  const [messages, setMessages] = useState(null);
-  const [count, setCount] = useState(PAGE);
+export default function RoomChat({ hub, room, user, access, members, roleOf, onSignIn, crowd = 0 }) {
+  // The live window, and what is older: pages read on asking, and messages a
+  // new one pushed out of the window while the chat was open.
+  const [live, setLive] = useState(null);
+  const [older, setOlder] = useState([]);
+  const [olderDone, setOlderDone] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const oldestSnap = useRef(null); // the oldest message on screen, to page back from
+  const olderCount = useRef(0);
+  const keepView = useRef(null); // { height, top } while older messages go in above
+  const messages = useMemo(() => {
+    if (live === null) return null;
+    const seen = new Set(live.map((m) => m.id));
+    return [...older.filter((m) => !seen.has(m.id)), ...live];
+  }, [older, live]);
   const [text, setText] = useState('');
-  // Who is typing (their stamps), and my own stamps as I type (lib/typing.js).
+  // Who is typing (their stamps), and my own stamps as I type (lib/typing.js),
+  // only while the Room is small: every stamp is read by everyone inside.
   const [typing, setTyping] = useState({});
   const stamper = useRef(null);
-  useEffect(() => watchRoomTyping(hub.id, room.id, setTyping), [hub.id, room.id]);
+  const quiet = crowd <= ROOM_TYPING_MAX;
   useEffect(() => {
-    if (!user) return undefined;
-    stamper.current = makeTypingStamper({ stamp: () => stampRoomTyping(hub.id, room.id, user.uid), clear: () => clearRoomTyping(hub.id, room.id, user.uid) });
-    return () => stamper.current?.stop();
-  }, [hub.id, room.id, user?.uid]);
+    if (!quiet) {
+      setTyping({});
+      return undefined;
+    }
+    return watchRoomTyping(hub.id, room.id, setTyping);
+  }, [hub.id, room.id, quiet]);
+  useEffect(() => {
+    if (!user || !quiet) return undefined;
+    stamper.current = makeTypingStamper({
+      stamp: () => stampRoomTyping(hub.id, room.id, user.uid),
+      clear: () => clearRoomTyping(hub.id, room.id, user.uid),
+      every: ROOM_TYPING_EVERY_MS,
+    });
+    return () => {
+      stamper.current?.stop();
+      stamper.current = null;
+    };
+  }, [hub.id, room.id, user?.uid, quiet]);
   const [files, setFiles] = useState([]);
   const [progress, setProgress] = useState({});
   const [sending, setSending] = useState(false);
@@ -78,14 +107,53 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
   const myName = user?.username ?? null;
 
   useEffect(() => {
-    setMessages(null);
-    return watchRoomMessages(hub.id, room.id, setMessages, () => setError("This Room's messages couldn't load."), count);
-  }, [hub.id, room.id, count]);
+    setLive(null);
+    setOlder([]);
+    setOlderDone(false);
+    oldestSnap.current = null;
+    olderCount.current = 0;
+    return watchRoomMessages(hub.id, room.id, (list, { oldest, fellOut }) => {
+      if (fellOut.length) {
+        // The first to fall out is the oldest on screen until a page goes in above it.
+        if (olderCount.current === 0) oldestSnap.current = fellOut[0].snap;
+        olderCount.current += fellOut.length;
+        setOlder((o) => [...o, ...fellOut.map((f) => f.message)]);
+      }
+      if (olderCount.current === 0) oldestSnap.current = oldest;
+      setLive(list);
+    }, () => setError("This Room's messages couldn't load."), PAGE);
+  }, [hub.id, room.id]);
 
-  // Stay at the newest message unless you've scrolled up to read.
+  async function loadOlder() {
+    if (!oldestSnap.current || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const { list, oldest } = await getRoomMessagesBefore(hub.id, room.id, oldestSnap.current, PAGE);
+      if (list.length < PAGE) setOlderDone(true);
+      if (oldest) oldestSnap.current = oldest;
+      olderCount.current += list.length;
+      const el = scroller.current;
+      stick.current = false;
+      if (el) keepView.current = { height: el.scrollHeight, top: el.scrollTop };
+      setOlder((o) => [...list, ...o]);
+    } catch {
+      setError("Older messages couldn't load.");
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
+  // Stay at the newest message unless you've scrolled up to read; older
+  // messages going in above leave what you were reading where it was.
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (keepView.current) {
+      el.scrollTop = keepView.current.top + (el.scrollHeight - keepView.current.height);
+      keepView.current = null;
+    } else if (stick.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages]);
 
   function onScroll() {
@@ -298,12 +366,12 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
       }}
     >
       <div className="room__scroll" ref={scroller} onScroll={onScroll}>
-        {messages?.length === count && (
-          <button type="button" className="room__older" onClick={() => { stick.current = false; setCount((c) => c + PAGE); }}>
-            Load older messages
+        {messages && !olderDone && (live.length === PAGE || older.length > 0) && (
+          <button type="button" className="room__older" onClick={loadOlder} disabled={loadingOlder}>
+            {loadingOlder ? 'Loading older messages…' : 'Load older messages'}
           </button>
         )}
-        {messages && messages.length < count && (
+        {messages && (olderDone || (live.length < PAGE && older.length === 0)) && (
           <div className="room__start">
             <p className="muted">The start of {room.name}'s chat.{room.topic ? ` ${room.topic}` : ''}</p>
           </div>
@@ -369,7 +437,7 @@ export default function RoomChat({ hub, room, user, access, members, roleOf, onS
         </div>
       ) : (
         <>
-        <TypingLine stamps={typing} meUid={user?.uid} />
+        <TypingLine stamps={typing} meUid={user?.uid} freshMs={ROOM_TYPING_FRESH_MS} />
         <form className="room__composer" onSubmit={submit}>
           {mention && suggestions.length > 0 && (
             <ul className="room__mentions" role="listbox" aria-label="People to mention">
