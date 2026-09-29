@@ -30,6 +30,7 @@ export function cleanNotice(id, data) {
     workspaceId: text(data.workspaceId, 200) || null,
     workspaceName: text(data.workspaceName, 120),
     hubId: text(data.hubId, 32) || null,
+    boardId: text(data.boardId, 40) || null,
     ownerUid: text(data.ownerUid, 128) || null,
     postId: text(data.postId, 128) || null,
     commentId: text(data.commentId, 128) || null,
@@ -77,6 +78,7 @@ export function describeNotice(notice) {
 /** Where opening a notice goes on the site. */
 export function noticeLink(notice) {
   const postId = notice.target === 'hub_post' || notice.target === 'profile_post' ? notice.targetId : notice.postId;
+  if (postId && notice.hubId && notice.boardId) return `/h/${notice.hubId}/b/${notice.boardId}/p/${postId}`;
   if (postId && notice.hubId) return `/h/${notice.hubId}/p/${postId}`;
   if (postId && notice.ownerUid) return `/people/${notice.ownerUid}/p/${postId}`;
   return `/people/${notice.fromUid}`;
@@ -111,27 +113,28 @@ function send(me, to, id, record) {
   return setDoc(doc(inbox(to), id), { ...record, fromUid: me, read: false, createdAt: serverTimestamp() }).catch(() => {});
 }
 
+// A post in one of a Board's rooms says which room, so the rules find it.
+const roomOf = (scope) => (scope.hubId && scope.boardId ? { boardId: scope.boardId } : {});
+
 /**
  * A vote on a post or comment, told to its author. `scope` is where the post
- * is ({hubId} or {profileUid}); `commentId` when it's on a comment.
+ * is ({hubId}, {hubId, boardId} or {profileUid}); `commentId` when it's on a
+ * comment.
  */
 export function notifyVote(me, { scope, postId, commentId, authorUid, vote }) {
-  // A post in a Board room: the notice rules do not know rooms yet.
-  if (scope?.boardId) return Promise.resolve();
   if (!vote) return Promise.resolve();
   const onComment = !!commentId;
   const target = scope.hubId ? (onComment ? 'hub_comment' : 'hub_post') : (onComment ? 'post_comment' : 'profile_post');
   const targetId = onComment ? commentId : postId;
   const where = scope.hubId
-    ? { hubId: scope.hubId, ...(onComment ? { postId } : {}) }
+    ? { hubId: scope.hubId, ...roomOf(scope), ...(onComment ? { postId } : {}) }
     : { ownerUid: scope.profileUid, ...(onComment ? { postId } : {}) };
   return send(me, authorUid, `like__${target}__${targetId}__${me}`, { type: 'like', target, targetId, ...where, vote });
 }
 
 /** A comment, told to the post's author, or a reply to the comment's author. */
 export function notifyComment(me, { scope, postId, commentId, parentId, text: words, toUid }) {
-  if (scope?.boardId) return Promise.resolve();
-  const place = scope.hubId ? { hubId: scope.hubId } : { ownerUid: scope.profileUid };
+  const place = scope.hubId ? { hubId: scope.hubId, ...roomOf(scope) } : { ownerUid: scope.profileUid };
   const key = scope.hubId ? `h_${scope.hubId}` : `p_${scope.profileUid}`;
   return send(me, toUid, `comment__${key}__${postId}__${commentId}`, {
     type: 'comment', ...place, postId, commentId, ...(parentId ? { parentId } : {}), ...(words ? { text: words } : {}),
