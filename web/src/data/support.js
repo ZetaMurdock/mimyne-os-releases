@@ -70,13 +70,18 @@ export function makeCounter(hub, { now = Date.now } = {}) {
 let stopped = false;
 export const supportStopped = () => stopped;
 /** Tests only. */
-export const resetSupport = () => { stopped = false; };
+export const resetSupport = () => { stopped = false; restUntil = 0; };
 
 const idToken = () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null));
 
 /** Sends a batch; resolves true when the file service took it. */
-export async function sendMinutes(minutes, { fetchFn = fetch, token = idToken, keepalive = false } = {}) {
-  if (stopped || !minutes.length) return false;
+// The file service said the database is over its limit (503) or asked for
+// less (429): nothing is sent for a while, rather than every tick.
+export const BUSY_REST_MS = 10 * 60_000;
+let restUntil = 0;
+
+export async function sendMinutes(minutes, { fetchFn = fetch, token = idToken, keepalive = false, now = Date.now } = {}) {
+  if (stopped || !minutes.length || now() < restUntil) return false;
   const bearer = await token().catch(() => null);
   if (!bearer) return false;
   try {
@@ -87,6 +92,7 @@ export async function sendMinutes(minutes, { fetchFn = fetch, token = idToken, k
       body: JSON.stringify({ minutes }),
     });
     if (res.status === 404 || res.status === 401) stopped = true;
+    if (res.status === 503 || res.status === 429) restUntil = now() + BUSY_REST_MS;
     // Opted out: the file service records nothing, so there is nothing to send.
     if (res.ok && typeof res.json === 'function') {
       const answer = await res.json().catch(() => null);

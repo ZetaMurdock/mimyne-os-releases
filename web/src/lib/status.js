@@ -1,8 +1,9 @@
 // Whether someone is around, read the way the app reads it
 // (runtime/status.js in the app's repo): each of the app and the website
 // keeps its own stamp fresh while open, so a closed one goes stale.
-export const STATUS_HEARTBEAT_MS = 60 * 1000;
-export const STATUS_STALE_MS = 150 * 1000;
+// A beat every two minutes: each stamp is read by everyone watching.
+export const STATUS_HEARTBEAT_MS = 120 * 1000;
+export const STATUS_STALE_MS = 330 * 1000;
 export const IDLE_MS = 5 * 60 * 1000;
 
 const stamp = (value) => (value && typeof value.toMillis === 'function' ? value.toMillis() : (typeof value === 'number' ? value : null));

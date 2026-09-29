@@ -2,7 +2,7 @@
 // who's in the Hub right now, and its Files shelf. The rules are in the
 // app's repo (firestore.rules, "hubs": rooms, here, files).
 import {
-  addDoc, collection, deleteDoc, deleteField, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc,
+  Timestamp, addDoc, collection, deleteDoc, deleteField, doc, limitToLast, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase.js';
 import { cleanFiles, cleanMessage } from './api.js';
@@ -211,9 +211,12 @@ export function watchRoomTyping(hubId, roomId, onChange) {
 
 // ---------------------------------------------------------- who's here now
 
-const HERE_FRESH = 150_000;
+// A stamp every two minutes (HubRooms), counted as here for five and a half.
+// Each stamp is read by everyone watching the Hub, so the fewer the better.
+export const HERE_BEAT_MS = 120_000;
+const HERE_FRESH = 330_000;
 
-/** Marks you as in the Hub now (and in which Room); sent again each minute. */
+/** Marks you as in the Hub now (and in which Room); sent again every two minutes. */
 export function stampHere(hubId, uid, room, writing = false) {
   return setDoc(doc(db, 'hubs', hubId, 'here', uid), withoutEmpty({ at: serverTimestamp(), room, writing: writing || undefined })).catch(() => {});
 }
@@ -224,8 +227,11 @@ export function leaveHere(hubId, uid) {
 
 /** uid → { room, writing }, for everyone stamped in the last couple of minutes. */
 export function watchHere(hubId, onChange) {
+  // Only stamps from the last few minutes: windows closed without leaving
+  // (a crash, a sleep) left theirs behind, and every one was read again on
+  // every visit.
   return onSnapshot(
-    collection(db, 'hubs', hubId, 'here'),
+    query(collection(db, 'hubs', hubId, 'here'), where('at', '>', Timestamp.fromMillis(Date.now() - HERE_FRESH))),
     (snap) => {
       const cutoff = Date.now() - HERE_FRESH;
       onChange(Object.fromEntries(snap.docs

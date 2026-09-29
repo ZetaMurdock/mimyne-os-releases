@@ -1,6 +1,7 @@
 // Counts (approvals, views, comments), asked of Firestore politely. Each post
 // on a page needs several: they go a few at a time, the same count is asked
-// once however many cards want it, and answers are kept for a minute.
+// once however many cards want it, and answers are kept for five minutes
+// (your own vote or comment forgets its count at once, forgetCount).
 //
 // Firestore can refuse count queries outright ("resource-exhausted", 429)
 // while ordinary reads still work; the site then showed every approval as 0
@@ -11,9 +12,9 @@
 import { getCountFromServer, getDocs, limit, query as narrowed } from 'firebase/firestore';
 
 const AT_ONCE = 4;
-const KEEP_MS = 60_000;
+const KEEP_MS = 5 * 60_000;
 const REST_MS = 5 * 60_000;
-const MAX_READ = 500;
+const MAX_READ = 200;
 
 let running = 0;
 const waiting = [];

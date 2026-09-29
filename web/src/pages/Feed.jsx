@@ -18,6 +18,15 @@ export function feedLoader() {
   return getFeed();
 }
 
+// A filter (?f=) sorts the same posts another way: the feed is not loaded
+// again for it. A feed load is hundreds of reads (every circle's posts and
+// their counts), and it ran again on every filter click.
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }) {
+  if (formMethod) return defaultShouldRevalidate;
+  if (currentUrl.pathname === nextUrl.pathname) return false;
+  return defaultShouldRevalidate;
+}
+
 const FILTERS = [
   { id: 'for-you', label: 'For you' },
   { id: 'buddies', label: 'Buddies' },

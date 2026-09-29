@@ -6,7 +6,7 @@ import Icon from '../Icon.jsx';
 import Canvas from '../canvas/Canvas.jsx';
 import RoomChat from './RoomChat.jsx';
 import {
-  clearRoomWorkspace, createRoom, deleteRoom, leaveHere, levelIn, roomIdFor, roomName, roomRights, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
+  HERE_BEAT_MS, clearRoomWorkspace, createRoom, deleteRoom, leaveHere, levelIn, roomIdFor, roomName, roomRights, stampHere, updateRoom, watchHere, watchLatest, watchRooms,
 } from '../../data/rooms.js';
 import { watchCanvas, watchPreview } from '../../data/canvas.js';
 import { linkWorkspace, myAppWorkspaces, watchAppPreview, watchAppWorkspace } from '../../data/appWorkspaces.js';
@@ -511,7 +511,7 @@ function useHere(hubId, user, roomId, writing) {
     }
     const beat = () => document.visibilityState === 'visible' && stampHere(hubId, user.uid, roomId ?? undefined, writing);
     beat();
-    const timer = setInterval(beat, 60_000);
+    const timer = setInterval(beat, HERE_BEAT_MS);
     document.addEventListener('visibilitychange', beat);
     return () => {
       clearInterval(timer);
